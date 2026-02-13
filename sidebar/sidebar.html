@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Net</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+    /* Color */
+    :root {
+      --bg: #0f1923;
+      --surface: #162030;
+      --surface2: #1e2d3d;
+      --border: #253545;
+      --gold: #c8b88a;
+      --gold-light: #e8d8aa;
+      --text: #d8e4f0;
+      --muted: #7a8a9a;
+      --green: #3db87a;
+      --yellow: #e0b040;
+      --red: #e05050;
+      --green-bg: #0a2018;
+      --yellow-bg: #231800;
+      --red-bg: #200a0a;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      background: var(--surface);
+    }
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-icon { font-size: 18px; }
+    .logo-text { font-family: 'DM Serif Display', serif; font-size: 16px; color: var(--gold); }
+    .close-btn {
+      background: none; border: none; color: var(--muted); font-size: 20px;
+      cursor: pointer; padding: 2px 6px; border-radius: 4px; line-height: 1;
+    }
+    .close-btn:hover { background: var(--surface2); color: var(--text); }
+
+    /* Scrollable Content Area */
+    .scroll { flex: 1; overflow-y: auto; padding: 16px; }
+    .scroll::-webkit-scrollbar { width: 4px; }
+    .scroll::-webkit-scrollbar-track { background: transparent; }
+    .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* States - only one shows at a time */
+    #stateIdle, #stateLoading, #stateResults { display: none; }
+    #stateIdle.active, #stateLoading.active, #stateResults.active { display: block; }
+
+    /* Idle State */
+    .idle-card { text-align: center; padding: 40px 20px; }
+    .idle-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.7; }
+    .idle-title { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--gold); margin-bottom: 8px; }
+    .idle-sub { color: var(--muted); line-height: 1.6; font-size: 13px; }
+
+    /* Loading State */
+    .loading-card { text-align: center; padding: 60px 20px; }
+    .spinner {
+      width: 36px; height: 36px; margin: 0 auto 20px;
+      border: 3px solid var(--border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--gold); margin-bottom: 6px; }
+    .loading-step { color: var(--muted); font-size: 12px; }
+
+    /* Section Label */
+    .section-label {
+      font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 10px; margin-top: 20px;
+    }
+    .section-label:first-child { margin-top: 0; }
+
+    /* Term Cards (Task 1) */
+    .term-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+    .term-card:hover { border-color: #3a5a7a; }
+    .term-card.risk-low { border-left: 3px solid var(--green); }
+    .term-card.risk-medium { border-left: 3px solid var(--yellow); }
+    .term-card.risk-high { border-left: 3px solid var(--red); }
+
+    .term-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 14px; cursor: pointer;
+    }
+    .term-left { display: flex; align-items: center; gap: 10px; }
+    .risk-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .risk-dot.low { background: var(--green); }
+    .risk-dot.medium { background: var(--yellow); }
+    .risk-dot.high { background: var(--red); }
+    .term-name { font-weight: 500; font-size: 13px; }
+    .term-value { font-size: 12px; color: var(--gold); font-weight: 500; }
+    .expand-arrow { color: var(--muted); font-size: 11px; transition: transform 0.2s; }
+    .term-card.open .expand-arrow { transform: rotate(180deg); }
+
+    /* Term Card Expanded Content */
+    .term-body { display: none; padding: 0 14px 14px; border-top: 1px solid var(--border); }
+    .term-card.open .term-body { display: block; }
+    .term-explanation { color: var(--text); line-height: 1.65; font-size: 13px; padding-top: 12px; margin-bottom: 10px; }
+    .term-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .meta-badge { padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .badge-green { background: var(--green-bg); color: var(--green); border: 1px solid #1a4a30; }
+    .badge-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid #3a2800; }
+    .badge-red { background: var(--red-bg); color: var(--red); border: 1px solid #3a1010; }
+    .badge-gray { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .term-citation { font-size: 11px; color: var(--muted); font-style: italic; margin-bottom: 12px; }
+
+    /* Follow-up Question */
+    .followup-area { margin-top: 4px; }
+    .followup-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .followup-input-row { display: flex; gap: 6px; }
+    .followup-input {
+      flex: 1; padding: 8px 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 12px;
+      font-family: 'DM Sans', sans-serif; outline: none;
+    }
+    .followup-input:focus { border-color: var(--gold); }
+    .followup-btn {
+      padding: 8px 12px; background: var(--gold); color: var(--bg);
+      border: none; border-radius: 6px; font-size: 12px; font-weight: 600;
+      cursor: pointer; font-family: 'DM Sans', sans-serif; white-space: nowrap;
+    }
+    .followup-btn:hover { background: var(--gold-light); }
+    .followup-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .followup-response {
+      margin-top: 10px; padding: 10px 12px;
+      background: var(--surface2); border-radius: 6px;
+      font-size: 12px; line-height: 1.65; color: var(--text);
+      border-left: 2px solid var(--gold); display: none;
+    }
+
+    /* Correction Button */
+    .correct-row { margin-top: 8px; }
+    .correct-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); font-size: 11px; padding: 4px 10px;
+      border-radius: 4px; cursor: pointer; font-family: 'DM Sans', sans-serif;
+    }
+    .correct-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+
+    /* Priority Banner (Task 2) */
+    .priority-banner {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px; margin-top: 20px;
+    }
+    .priority-banner-title { font-family: 'DM Serif Display', serif; font-size: 14px; color: var(--gold); margin-bottom: 4px; }
+    .priority-banner-sub { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
+
+    /* Priority Tags */
+    .priority-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .priority-tag {
+      padding: 5px 12px; border-radius: 20px; font-size: 12px;
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--muted); cursor: pointer; transition: all 0.15s;
+    }
+    .priority-tag.selected { border-color: var(--gold); background: #2a2010; color: var(--gold); }
+
+    /* Free Text Input */
+    .priority-free-input {
+      width: 100%; padding: 9px 12px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 12px;
+      font-family: 'DM Sans', sans-serif; outline: none; resize: none; margin-bottom: 10px;
+    }
+    .priority-free-input:focus { border-color: var(--gold); }
+
+    /* Submit Button */
+    .priority-submit-btn {
+      width: 100%; padding: 10px; background: var(--gold); color: var(--bg);
+      border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: 'DM Sans', sans-serif;
+    }
+    .priority-submit-btn:hover { background: var(--gold-light); }
+    .priority-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Priority Results (Task 2) */
+    #priorityResults { display: none; margin-top: 6px; }
+    .focused-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; margin-bottom: 10px; overflow: hidden;
+    }
+    .focused-header { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .focused-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+    .focused-lease-text { font-size: 12px; color: var(--muted); font-style: italic; margin-bottom: 6px; line-height: 1.5; }
+    .focused-relevance { font-size: 12px; padding: 8px 10px; border-radius: 5px; line-height: 1.55; }
+    .relevance-warning { background: var(--yellow-bg); color: #dda030; border-left: 2px solid var(--yellow); }
+    .relevance-alert { background: var(--red-bg); color: #cc6060; border-left: 2px solid var(--red); }
+    .relevance-ok { background: var(--green-bg); color: #50a870; border-left: 2px solid var(--green); }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">
+    <span class="logo-icon">🛡</span>
+    <span class="logo-text">Security Net</span>
+  </div>
+  <button class="close-btn" id="closeBtn">✕</button>
+</div>
+
+<div class="scroll">
+
+  <!-- Idle State -->
+  <div id="stateIdle">
+    <div class="idle-card">
+      <div class="idle-icon">📄</div>
+      <div class="idle-title">Ready to analyze</div>
+      <div class="idle-sub">Click "Analyze This Lease" in the extension popup to get started.</div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div id="stateLoading">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <div class="loading-title">Reading your lease</div>
+      <div class="loading-step" id="loadingStep">Extracting text…</div>
+    </div>
+  </div>
+
+  <!-- Results State -->
+  <div id="stateResults">
+
+    <!-- Summarization and Review -->
+    <div class="section-label">Summarization and Review</div>
+    <div id="termsList"></div>
+
+    <div class="divider"></div>
+
+    <!-- Prioritize and Personalized -->
+    <div class="priority-banner">
+      <div class="priority-banner-title">Prioritize and Personalized</div>
+      <div class="priority-banner-sub">Select your priorities and the AI will re-focus the analysis around your situation.</div>
+      <div class="priority-tags" id="priorityTags">
+        <div class="priority-tag" data-tag="pet policy">🐾 Pet policy</div>
+        <div class="priority-tag" data-tag="early termination">🚪 Early exit</div>
+        <div class="priority-tag" data-tag="upfront costs">💰 Upfront costs</div>
+        <div class="priority-tag" data-tag="parking">🚗 Parking</div>
+        <div class="priority-tag" data-tag="utilities">💡 Utilities</div>
+        <div class="priority-tag" data-tag="rent increases">📈 Rent increases</div>
+      </div>
+      <textarea
+        class="priority-free-input"
+        id="priorityFreeText"
+        rows="2"
+        placeholder="Anything specific? e.g. 'I have a large dog and may need to leave after 8 months'"
+      ></textarea>
+      <button class="priority-submit-btn" id="prioritySubmitBtn">Re-focus analysis for me</button>
+    </div>
+
+    <!-- Prioritize and Personalized Results -->
+    <div id="priorityResults">
+      <div class="divider"></div>
+      <div class="section-label">Focused on your priorities</div>
+      <div id="priorityCardsList"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="sidebar.js"></script>
+</body>
+</html>
