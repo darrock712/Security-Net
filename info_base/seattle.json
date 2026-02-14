@@ -1,1 +1,70 @@
-"Seattle Handbook Info Here"
+{
+  "jurisdiction": "Seattle, WA",
+  "source": "Seattle Renter's Handbook 2024 + Washington State RCW",
+  "regulations": [
+    {
+      "id": "security_deposit",
+      "topic": "Security Deposit",
+      "rule": "No statutory cap, but must be returned within 21 days of move-out with itemized deductions.",
+      "market_norm": "Typically equal to one month's rent. Above 1.5x monthly rent is above market.",
+      "risk_threshold": "Flag if deposit exceeds 2x monthly rent",
+      "citation": "RCW 59.18.270"
+    },
+    {
+      "id": "late_fee",
+      "topic": "Late Fees",
+      "rule": "Late fees must be reasonable and reflect actual damages. Cannot be punitive.",
+      "market_norm": "Typical range: $25–$75 flat fee, or 1–5% of monthly rent.",
+      "risk_threshold": "Flag if late fee exceeds $100 or 5% of monthly rent",
+      "citation": "RCW 59.18.170"
+    },
+    {
+      "id": "landlord_entry",
+      "topic": "Landlord Entry",
+      "rule": "Landlord must provide at least 2 days (48 hours) written notice before entering, except in emergencies.",
+      "market_norm": "48-hour notice is standard.",
+      "risk_threshold": "Flag if lease allows entry with less than 48 hours notice",
+      "citation": "RCW 59.18.150"
+    },
+    {
+      "id": "rent_increase",
+      "topic": "Rent Increases",
+      "rule": "Landlord must provide 60 days written notice for any rent increase greater than 10%.",
+      "market_norm": "30-day notice for smaller increases is standard.",
+      "risk_threshold": "Flag if lease does not specify notice requirements for rent increases",
+      "citation": "Seattle Municipal Code 7.24.030"
+    },
+    {
+      "id": "early_termination",
+      "topic": "Early Termination",
+      "rule": "No state cap on early termination penalties, but terms must be clearly disclosed in the lease.",
+      "market_norm": "Typical penalty: 1–2 months rent. Penalties over 2 months are above market.",
+      "risk_threshold": "Flag if penalty exceeds 2 months rent or terms are vague",
+      "citation": "RCW 59.18.310"
+    },
+    {
+      "id": "pet_policy",
+      "topic": "Pet Policy",
+      "rule": "No state regulation on pet fees, but amounts must be clearly disclosed before signing.",
+      "market_norm": "Pet deposit: $200–$500 one-time. Monthly pet rent: $25–$75.",
+      "risk_threshold": "Flag if pet fees are not disclosed or monthly pet rent exceeds $100",
+      "citation": "Seattle Renter's Handbook, Section 4"
+    },
+    {
+      "id": "subletting",
+      "topic": "Subletting",
+      "rule": "Landlord may restrict subletting but must state this clearly in the lease.",
+      "market_norm": "Most leases require written landlord approval for subletting.",
+      "risk_threshold": "Flag if subletting is prohibited with no exceptions for extenuating circumstances",
+      "citation": "RCW 59.18.200"
+    },
+    {
+      "id": "utilities",
+      "topic": "Utilities",
+      "rule": "Lease must clearly state which utilities the tenant is responsible for.",
+      "market_norm": "Tenant typically pays electricity and internet. Water/trash often included.",
+      "risk_threshold": "Flag if utility responsibilities are not clearly defined",
+      "citation": "Seattle Renter's Handbook, Section 2"
+    }
+  ]
+}

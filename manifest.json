@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Security Net",
+  "version": "0.1.0",
+  "description": "Understand key terms and risks in your lease",
+
+  "permissions": ["activeTab", "storage", "scripting", "sidePanel"],
+
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*"
+  ],
+
+  "background": {
+    "service_worker": "background/api.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Security Net"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["sidebar/*", "info_base/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

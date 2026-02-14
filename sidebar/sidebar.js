@@ -33,18 +33,18 @@ function setLoadingStep(msg) {
 
 // Load Seattle Regulations
 async function loadRegulations() {
-  const url = chrome.runtime.getURL('knowledge-base/seattle.json');
+  const url = chrome.runtime.getURL('info_base/seattle.json');
   const res = await fetch(url);
   return res.json();
 }
 
-// Call Gemini via the background service worker
-function callGemini(prompt) {
+// Call Gemini via the background service worker (optional pdfBase64 for inline PDF)
+function callGemini(prompt, pdfBase64) {
   return new Promise((resolve, reject) => {
     chrome.storage.local.get(['apiKey'], ({ apiKey }) => {
       if (!apiKey) { reject(new Error('No API key')); return; }
       chrome.runtime.sendMessage(
-        { action: 'callGemini', prompt, apiKey },
+        { action: 'callGemini', prompt, apiKey, pdfBase64 },
         (res) => {
           if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); return; }
           if (!res.success) { reject(new Error(res.error)); return; }
@@ -55,17 +55,29 @@ function callGemini(prompt) {
   });
 }
 
-// Task 1 Prompt
-function buildSummaryPrompt(pdfText, regulations) {
+// Fetch the PDF as base64 via the background service worker
+function fetchPDFBase64(url) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { action: 'fetchPDF', url },
+      (res) => {
+        if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); return; }
+        if (!res.success) { reject(new Error(res.error)); return; }
+        resolve(res.data);
+      }
+    );
+  });
+}
+
+// Task 1 Prompt (PDF is sent inline, so no need to embed lease text)
+function buildSummaryPrompt(regulations) {
   return `
-You are analyzing a residential lease. Extract and evaluate the following key terms.
+You are analyzing the attached residential lease PDF. Read the entire document carefully.
+Extract and evaluate the following key terms from what you find in the PDF.
 Return ONLY valid JSON — no markdown, no explanation outside the JSON.
 
 SEATTLE REGULATIONS REFERENCE:
 ${JSON.stringify(regulations.regulations, null, 2)}
-
-LEASE TEXT:
-${pdfText.substring(0, 6000)}
 
 Return this exact JSON structure:
 {
@@ -321,12 +333,12 @@ async function runAnalysis() {
   try {
     const regulations = await loadRegulations();
 
-    setLoadingStep('Extracting lease text…');
-    const pdfText = await getPDFText();
+    setLoadingStep('Fetching PDF…');
+    const pdfBase64 = await getPDFBase64();
 
     setLoadingStep('Analyzing with AI…');
-    const prompt = buildSummaryPrompt(pdfText, regulations);
-    const raw = await callGemini(prompt);
+    const prompt = buildSummaryPrompt(regulations);
+    const raw = await callGemini(prompt, pdfBase64);
 
     let parsed;
     try {
@@ -350,49 +362,17 @@ async function runAnalysis() {
   }
 }
 
-// Get PDF Text
-function getPDFText() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['lastPDFText'], ({ lastPDFText }) => {
-      if (lastPDFText) {
-        resolve(lastPDFText);
-      } else {
-        // Falls back to demo lease if no PDF text is found
-        resolve(getDemoLeaseText());
+// Fetch the actual PDF from the page URL via background worker
+function getPDFBase64() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(['pdfURL'], ({ pdfURL }) => {
+      if (!pdfURL) {
+        reject(new Error('No PDF URL found. Click "Analyze This Lease" from the popup on a PDF page.'));
+        return;
       }
+      fetchPDFBase64(pdfURL).then(resolve).catch(reject);
     });
   });
-}
-
-// Demo Lease Text
-function getDemoLeaseText() {
-  return `
-RESIDENTIAL LEASE AGREEMENT
-Property: 842 Pine Street, Apt 4B, Seattle, WA 98101
-
-1. LEASE TERM: This lease commences August 1, 2025 and ends July 31, 2026 (12 months).
-
-2. RENT: Tenant shall pay $1,600 per month, due on the 1st of each month. 
-A late fee of $150 will be charged if rent is not received by the 5th of the month.
-
-3. SECURITY DEPOSIT: Tenant shall pay a security deposit of $3,500 (equal to two months rent) 
-prior to move-in. Deposit will be returned within 30 days of move-out.
-
-4. PETS: Small pets are allowed. Pet deposit and monthly pet fees to be determined at landlord's discretion.
-
-5. EARLY TERMINATION: If Tenant vacates before the end of the lease term, Tenant shall forfeit 
-the full security deposit and pay an additional two months rent as a termination fee.
-
-6. ENTRY: Landlord may enter the premises with 24-hour notice for inspections or repairs.
-
-7. PARKING: Not included. Street parking available.
-
-8. UTILITIES: Tenant is responsible for all utilities including electricity, gas, water, and internet.
-
-9. RENT INCREASES: Landlord reserves the right to increase rent with 30 days written notice.
-
-10. SUBLETTING: Subletting is strictly prohibited without prior written consent of Landlord.
-  `.trim();
 }
 
 // Kick everything off

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 280px;
+      font-family: 'Georgia', serif;
+      background: #0f1923;
+      color: #e8e0d4;
+    }
+    .header {
+      padding: 20px 20px 14px;
+      border-bottom: 1px solid #1e2d3d;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .shield { font-size: 22px; }
+    h1 { font-size: 17px; font-weight: normal; letter-spacing: 0.5px; color: #c8b88a; }
+    .tagline { font-size: 11px; color: #7a8a9a; letter-spacing: 0.3px; }
+    .status-area { padding: 16px 20px; }
+    .status-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px;
+      background: #1a2535;
+      border-radius: 6px;
+      border: 1px solid #253545;
+      font-size: 13px;
+      color: #9aacbc;
+    }
+    .status-pill.found { border-color: #2a7a4a; background: #0f2a1e; color: #4db87a; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #4a5a6a; flex-shrink: 0; }
+    .dot.green { background: #4db87a; }
+    .btn-area { padding: 0 20px 20px; display: flex; flex-direction: column; gap: 8px; }
+    .btn {
+      width: 100%; padding: 11px;
+      border: none; border-radius: 6px;
+      font-size: 13px; cursor: pointer;
+      font-family: 'Georgia', serif;
+      transition: all 0.15s;
+    }
+    .btn-primary {
+      background: #c8b88a; color: #0f1923; font-weight: bold;
+    }
+    .btn-primary:hover:not(:disabled) { background: #ddd0a8; }
+    .btn-primary:disabled { background: #2a3545; color: #4a5a6a; cursor: not-allowed; }
+    .btn-secondary {
+      background: transparent; color: #7a8a9a;
+      border: 1px solid #253545; font-size: 12px;
+    }
+    .btn-secondary:hover { border-color: #4a5a6a; color: #9aacbc; }
+    .key-field { padding: 0 20px 16px; }
+    .key-input {
+      width: 100%; padding: 9px 12px;
+      background: #1a2535; border: 1px solid #253545;
+      border-radius: 6px; color: #c8d8e8; font-size: 12px;
+      font-family: monospace; outline: none;
+    }
+    .key-input:focus { border-color: #c8b88a; }
+    .key-label { font-size: 11px; color: #4a6a8a; margin-bottom: 6px; }
+    .key-saved { font-size: 11px; color: #4db87a; text-align: center; display: none; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <span class="shield">🛡</span>
+      <h1>Security Net</h1>
+    </div>
+    <div class="tagline">Lease analysis, plain and clear</div>
+  </div>
+
+  <div class="status-area">
+    <div class="status-pill" id="statusPill">
+      <div class="dot" id="dot"></div>
+      <span id="statusText">Checking page...</span>
+    </div>
+  </div>
+
+  <div class="btn-area">
+    <button class="btn btn-primary" id="analyzeBtn" disabled>Analyze This Lease</button>
+    <div class="key-label" style="padding: 0; font-size: 11px; color: #4a6a8a;">Gemini API Key</div>
+    <div class="key-field" style="padding: 0;">
+      <input class="key-input" id="apiKeyInput" type="password" placeholder="AIza..." autocomplete="off">
+    </div>
+    <button class="btn btn-secondary" id="saveKeyBtn">Save API Key</button>
+    <div class="key-saved" id="keySaved">✓ Key saved</div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -37,6 +37,8 @@ function injectSidebar() {
 // Waits for the Popup
 chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
   if (req.action === 'openSidebar') {
+    // Store the current page URL so the sidebar can fetch the PDF
+    chrome.storage.local.set({ pdfURL: window.location.href });
     injectSidebar();
     sendResponse({ ok: true });
   }
