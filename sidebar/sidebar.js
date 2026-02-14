@@ -284,7 +284,17 @@ prioritySubmitBtn.addEventListener('click', async () => {
   try {
     const prompt = buildPriorityPrompt(leaseSummaryCache, [...selectedTags], freeText);
     const raw = await callGemini(prompt);
-    const parsed = JSON.parse(raw);
+    
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Try to pull JSON out of a markdown code block if Gemini wraps it
+      const match = raw.match(/```(?:json)?\n?([\s\S]+?)\n?```/);
+      if (match) parsed = JSON.parse(match[1]);
+      else throw new Error('Could not parse AI response as JSON');
+    }
+    
     renderPriorityCards(parsed.focused_terms);
     priorityResults.style.display = 'block';
     priorityResults.scrollIntoView({ behavior: 'smooth' });
