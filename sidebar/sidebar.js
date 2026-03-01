@@ -281,6 +281,8 @@ function renderTerms(terms) {
         </div>` : ''}
         <div class="term-actions-row">
           ${term.source_text ? `<button class="jump-btn" data-term-id="${term.id}">↗ Jump to page ${term.source_page || '?'}</button>` : ''}
+        </div>
+        <div class="correct-row">
           <button class="correct-btn" data-term-id="${term.id}">✎ This looks wrong</button>
         </div>
       </div>
@@ -376,18 +378,53 @@ function handleJump(sourceText, sourcePage) {
 }
 
 // Correction Handler
-function handleCorrection(termId) {
+async function handleCorrection(termId) {
   const card = document.querySelector(`.term-card[data-id="${termId}"]`);
   if (!card) return;
   const term = leaseSummaryCache?.find(t => t.id === termId);
   if (!term) return;
 
   const correctRow = card.querySelector('.correct-row');
-  if (correctRow.querySelector('.correct-form')) return; // already open
+  if (correctRow.querySelector('.correct-form')) return;
+
+  // Show loading state immediately
+  correctRow.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:6px 0;">Finding alternatives…</div>`;
+
+  // Ask AI for alternative readings
+  let alternatives = [];
+  try {
+    const altPrompt = `
+You analyzed a lease and extracted this value for "${term.label}": "${term.value}"
+Your explanation was: "${term.explanation}"
+
+The user thinks this might be wrong. Generate 3 alternative interpretations of what this clause could mean or say.
+Keep each under 10 words. Be specific and realistic for a residential lease.
+
+Return ONLY a JSON array of 3 strings, no markdown:
+["alternative 1", "alternative 2", "alternative 3"]
+    `.trim();
+
+    const raw = await callGemini(altPrompt);
+    alternatives = parseGeminiJSON(raw);
+  } catch {
+    alternatives = [];
+  }
+
+  // Build the choices UI
+  const choicesHTML = alternatives.length > 0 ? `
+    <div class="correct-choices-label">Did you mean one of these?</div>
+    <div class="correct-choices">
+      ${alternatives.map((alt, i) => `
+        <button class="correct-choice-btn" data-index="${i}">${alt}</button>
+      `).join('')}
+    </div>
+    <div class="correct-divider-label">Or enter your own:</div>
+  ` : '';
 
   correctRow.innerHTML = `
     <div class="correct-form">
-      <div class="correct-current">Current value: <span class="correct-current-val">${term.value}</span></div>
+      <div class="correct-current">Current: <span class="correct-current-val">${term.value}</span></div>
+      ${choicesHTML}
       <input class="correct-input" type="text" placeholder="Enter the correct value…" />
       <div class="correct-actions">
         <button class="correct-verify-btn">Verify &amp; Apply</button>
@@ -402,6 +439,16 @@ function handleCorrection(termId) {
   const cancelBtn = correctRow.querySelector('.correct-cancel-btn');
   const resultEl = correctRow.querySelector('.correct-verify-result');
 
+  // Clicking a choice pre-fills the input and highlights the button
+  correctRow.querySelectorAll('.correct-choice-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      input.value = btn.textContent;
+      correctRow.querySelectorAll('.correct-choice-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      input.focus();
+    });
+  });
+
   function restoreButton() {
     correctRow.innerHTML = `<button class="correct-btn" data-term-id="${termId}">✎ This looks wrong</button>`;
     correctRow.querySelector('.correct-btn').addEventListener('click', () => handleCorrection(termId));
@@ -409,17 +456,14 @@ function handleCorrection(termId) {
 
   function applyCorrection(newValue) {
     term.value = newValue;
-    term.explanation = `[User corrected] ${newValue}`;
+    term.explanation = `[Corrected by user] ${newValue}`;
     renderTerms(leaseSummaryCache);
     const newCard = document.querySelector(`.term-card[data-id="${termId}"]`);
     if (newCard) newCard.classList.add('open');
   }
 
   cancelBtn.addEventListener('click', restoreButton);
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') verifyBtn.click();
-  });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyBtn.click(); });
 
   verifyBtn.addEventListener('click', async () => {
     const newValue = input.value.trim();
@@ -431,29 +475,22 @@ function handleCorrection(termId) {
 
     try {
       const verifyPrompt = `
-You are a fact-checker for a lease analysis tool. Your job is to defend what the lease document actually states.
+You are a fact-checker for a lease analysis tool.
 
-The AI read the lease and extracted this:
 Term: ${term.label}
 Extracted value: "${term.value}"
-Evidence from the lease: ${term.explanation}
+Evidence: ${term.explanation}
+User's proposed value: "${newValue}"
 
-A user is disputing this and claims the correct value is: "${newValue}"
-
-Does the user's value match what the lease document actually states, or does it contradict the extracted evidence?
-- If the extracted value is supported by the lease evidence, say so and note that the original appears correct.
-- Only favor the user's value if their input is clearly more consistent with the lease evidence than what was extracted.
-- Do NOT justify the user's input as "plausible in general" — you must evaluate it against the specific lease evidence above.
-
-Reply in this exact JSON format (no markdown):
-{"verdict":"original_correct"|"user_correct"|"uncertain","reason":"one sentence referencing the specific values and lease evidence"}
+Does the user's value match the lease evidence better than what was extracted?
+Reply ONLY as JSON (no markdown):
+{"verdict":"original_correct"|"user_correct"|"uncertain","reason":"one sentence"}
       `.trim();
 
       const raw = await callGemini(verifyPrompt);
       let parsed;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
+      try { parsed = JSON.parse(raw); }
+      catch {
         const match = raw.match(/```(?:json)?\n?([\s\S]+?)\n?```/);
         if (match) parsed = JSON.parse(match[1]);
         else throw new Error('Could not parse verification response');
@@ -461,7 +498,6 @@ Reply in this exact JSON format (no markdown):
 
       const { verdict, reason } = parsed;
       const isWarn = verdict === 'original_correct';
-      const applyLabel = isWarn ? 'Apply anyway' : 'Apply correction';
       const verdictClass = verdict === 'user_correct' ? 'verdict-ok' : isWarn ? 'verdict-warn' : 'verdict-uncertain';
       const verdictIcon = verdict === 'user_correct' ? '✓' : isWarn ? '⚠' : '?';
 
@@ -469,12 +505,11 @@ Reply in this exact JSON format (no markdown):
       resultEl.innerHTML = `
         ${verdictIcon} <span class="correct-reason">${reason}</span>
         <div class="correct-confirm-row">
-          <button class="correct-apply-btn">${applyLabel}</button>
+          <button class="correct-apply-btn">${isWarn ? 'Apply anyway' : 'Apply correction'}</button>
           <button class="correct-cancel-inline-btn">Cancel</button>
         </div>
       `;
       resultEl.style.display = 'block';
-
       resultEl.querySelector('.correct-apply-btn').addEventListener('click', () => applyCorrection(newValue));
       resultEl.querySelector('.correct-cancel-inline-btn').addEventListener('click', restoreButton);
 
@@ -488,7 +523,6 @@ Reply in this exact JSON format (no markdown):
         </div>
       `;
       resultEl.style.display = 'block';
-
       resultEl.querySelector('.correct-apply-btn').addEventListener('click', () => applyCorrection(input.value.trim()));
       resultEl.querySelector('.correct-cancel-inline-btn').addEventListener('click', restoreButton);
     } finally {
