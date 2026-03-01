@@ -254,7 +254,7 @@ function handleCorrection(termId) {
   }
 }
 
-// Priority Tag Selection 
+// Priority Tag Selection
 const selectedTags = new Set();
 document.querySelectorAll('.priority-tag').forEach(tag => {
   tag.addEventListener('click', () => {
@@ -269,6 +269,30 @@ document.querySelectorAll('.priority-tag').forEach(tag => {
   });
 });
 
+// Persist priority concerns across sessions
+function savePriorityConcerns() {
+  chrome.storage.local.set({
+    savedTags: [...selectedTags],
+    savedFreeText: priorityFreeText.value
+  });
+}
+
+function loadPriorityConcerns() {
+  chrome.storage.local.get(['savedTags', 'savedFreeText'], (result) => {
+    if (result.savedTags) {
+      result.savedTags.forEach(tag => selectedTags.add(tag));
+      document.querySelectorAll('.priority-tag').forEach(el => {
+        if (selectedTags.has(el.dataset.tag)) {
+          el.classList.add('selected');
+        }
+      });
+    }
+    if (result.savedFreeText) {
+      priorityFreeText.value = result.savedFreeText;
+    }
+  });
+}
+
 // Personalized Submit button
 prioritySubmitBtn.addEventListener('click', async () => {
   if (!leaseSummaryCache) return;
@@ -280,11 +304,19 @@ prioritySubmitBtn.addEventListener('click', async () => {
 
   prioritySubmitBtn.disabled = true;
   prioritySubmitBtn.textContent = 'Analyzing…';
+  savePriorityConcerns();
 
   try {
     const prompt = buildPriorityPrompt(leaseSummaryCache, [...selectedTags], freeText);
     const raw = await callGemini(prompt);
-    const parsed = JSON.parse(raw);
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      const match = raw.match(/```(?:json)?\n?([\s\S]+?)\n?```/);
+      if (match) parsed = JSON.parse(match[1]);
+      else throw new Error('Could not parse AI response as JSON');
+    }
     renderPriorityCards(parsed.focused_terms);
     priorityResults.style.display = 'block';
     priorityResults.scrollIntoView({ behavior: 'smooth' });
@@ -353,6 +385,7 @@ async function runAnalysis() {
     leaseSummaryCache = parsed.terms;
     renderTerms(parsed.terms);
     showState('Results');
+    loadPriorityConcerns();
 
   } catch (err) {
     stateLoading.classList.remove('active');
