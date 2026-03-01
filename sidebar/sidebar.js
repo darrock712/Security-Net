@@ -268,6 +268,10 @@ function renderTerms(terms) {
             <input class="followup-input" type="text" placeholder="e.g. Is this normal? Can I negotiate this?" data-term-id="${term.id}">
             <button class="followup-btn" data-term-id="${term.id}">Ask</button>
           </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:7px;cursor:pointer;">
+            <input type="checkbox" class="save-subq-checkbox" data-term-id="${term.id}" style="accent-color:var(--gold);cursor:pointer;">
+            <span style="font-size:11px;color:var(--muted);">Save this question as a custom topic for future leases</span>
+          </label>
           <div class="followup-response" id="followup-${term.id}"></div>
         </div>
         ${term.source_text ? `
@@ -320,6 +324,15 @@ async function handleFollowUp(termId) {
   const responseEl = document.getElementById(`followup-${termId}`);
   const question = input.value.trim();
   if (!question) return;
+
+  // Save as custom topic if checkbox is checked
+  const saveCheckbox = document.querySelector(`.save-subq-checkbox[data-term-id="${termId}"]`);
+  if (saveCheckbox && saveCheckbox.checked) {
+    const normalized = await normalizeCategoryName(question);
+    await saveCustomCategory(normalized);
+    await renderMemories();
+    saveCheckbox.checked = false;
+  }
 
   const term = leaseSummaryCache?.find(t => t.id === termId);
   if (!term) return;
