@@ -29,7 +29,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["sidebar/*", "info_base/*"],
+      "resources": ["sidebar/*", "info_base/*", "pdf_viewer/*", "pdfjs/*"],
       "matches": ["<all_urls>"]
     }
   ]
