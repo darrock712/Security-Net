@@ -1,4 +1,4 @@
-// Handles Task 1 (summarize and review) and Task 2 (sets the user for priority and personalized experience)
+// Handles Task 1 (summarize and review) and Task 2 (custom topics / memories)
 
 // Grab all the elements we need
 const stateIdle    = document.getElementById('stateIdle');
@@ -6,10 +6,11 @@ const stateLoading = document.getElementById('stateLoading');
 const stateResults = document.getElementById('stateResults');
 const loadingStep  = document.getElementById('loadingStep');
 const termsList    = document.getElementById('termsList');
-const priorityResults   = document.getElementById('priorityResults');
-const priorityCardsList = document.getElementById('priorityCardsList');
-const prioritySubmitBtn = document.getElementById('prioritySubmitBtn');
 const priorityFreeText  = document.getElementById('priorityFreeText');
+const priorityAddBtn    = document.getElementById('priorityAddBtn');
+const memoriesSection   = document.getElementById('memoriesSection');
+const memoriesList      = document.getElementById('memoriesList');
+const memoriesToggle    = document.getElementById('memoriesToggle');
 
 // Stores the lease summary so Task 2 can use it
 let leaseSummaryCache = null;
@@ -69,15 +70,145 @@ function fetchPDFBase64(url) {
   });
 }
 
+// Helper: parse JSON from Gemini response (handles markdown code blocks, control chars, truncation)
+function parseGeminiJSON(raw) {
+  // Step 1: Extract from markdown code block if present
+  let jsonStr = raw;
+  const codeBlockMatch = raw.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1];
+  }
+  
+  // Step 2: Try to find JSON object/array boundaries
+  const startIdx = jsonStr.search(/[\[{]/);
+  if (startIdx === -1) throw new Error('No JSON found in response');
+  jsonStr = jsonStr.slice(startIdx);
+  
+  // Step 3: Remove control characters that break JSON
+  jsonStr = jsonStr.replace(/[\x00-\x1F\x7F]/g, (c) => {
+    if (c === '\n' || c === '\r' || c === '\t') return c;
+    return '';
+  });
+  
+  // Step 4: Try parsing as-is
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    // Step 5: Try to fix common issues - truncated JSON
+    // Find the last complete object/array
+    let depth = 0;
+    let lastValidEnd = -1;
+    let inString = false;
+    let escaped = false;
+    
+    for (let i = 0; i < jsonStr.length; i++) {
+      const c = jsonStr[i];
+      if (escaped) { escaped = false; continue; }
+      if (c === '\\') { escaped = true; continue; }
+      if (c === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (c === '{' || c === '[') depth++;
+      if (c === '}' || c === ']') {
+        depth--;
+        if (depth === 0) lastValidEnd = i;
+      }
+    }
+    
+    if (lastValidEnd > 0) {
+      try {
+        return JSON.parse(jsonStr.slice(0, lastValidEnd + 1));
+      } catch {}
+    }
+    
+    // Step 6: Try adding closing brackets
+    let fixedJson = jsonStr;
+    while (depth > 0) {
+      // Guess what's needed based on last opener
+      const lastOpen = jsonStr.lastIndexOf('{') > jsonStr.lastIndexOf('[') ? '}' : ']';
+      fixedJson += lastOpen;
+      depth--;
+    }
+    
+    try {
+      return JSON.parse(fixedJson);
+    } catch {
+      throw new Error('Could not parse AI response as JSON: ' + e.message);
+    }
+  }
+}
+
+// Load saved custom categories from storage
+function loadCustomCategories() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['customCategories'], ({ customCategories }) => {
+      resolve(customCategories || []);
+    });
+  });
+}
+
+// Save a new custom category
+function saveCustomCategory(category) {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['customCategories'], ({ customCategories }) => {
+      const existing = customCategories || [];
+      if (!existing.includes(category)) {
+        existing.push(category);
+        chrome.storage.local.set({ customCategories: existing }, resolve);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+// Remove a custom category
+function removeCustomCategory(category) {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['customCategories'], ({ customCategories }) => {
+      const updated = (customCategories || []).filter(c => c !== category);
+      chrome.storage.local.set({ customCategories: updated }, resolve);
+    });
+  });
+}
+
+// Use AI to normalize user input into a clean category name
+async function normalizeCategoryName(userInput) {
+  const prompt = `
+A user wants to add a custom category to analyze in their lease.
+
+User input: "${userInput}"
+
+Convert this into a short, clear category label (2-4 words max).
+Examples:
+- "I have a large dog" → "Large Pet Policy"
+- "what if I need to leave early" → "Early Termination"
+- "smoking on balcony" → "Smoking Policy"
+- "can my partner move in" → "Occupancy Rules"
+- "noise after 10pm" → "Noise Policy"
+
+Return ONLY the category label, nothing else. No quotes, no explanation.
+`.trim();
+
+  const result = await callGemini(prompt);
+  return result.trim().replace(/["']/g, '');
+}
+
 // Task 1 Prompt (PDF is sent inline, so no need to embed lease text)
 function buildSummaryPrompt(regulations) {
+  // Extract just the relevant regulation text, not the full pages array
+  const regContext = regulations.pages 
+    ? regulations.pages.map(p => p.text).join('\n').slice(0, 8000)  // Limit size
+    : JSON.stringify(regulations).slice(0, 8000);
+  
   return `
 You are analyzing the attached residential lease PDF. Read the entire document carefully.
 Extract and evaluate the following key terms from what you find in the PDF.
-Return ONLY valid JSON — no markdown, no explanation outside the JSON.
 
-SEATTLE REGULATIONS REFERENCE:
-${JSON.stringify(regulations.regulations, null, 2)}
+IMPORTANT: Return ONLY valid JSON. No markdown, no code blocks, no explanation outside the JSON.
+Escape all special characters in strings (quotes, newlines, backslashes).
+
+SEATTLE RENTER REGULATIONS CONTEXT (for reference when assessing risk):
+${regContext}
 
 Return this exact JSON structure:
 {
@@ -85,51 +216,20 @@ Return this exact JSON structure:
     {
       "id": "security_deposit",
       "label": "Security Deposit",
-      "value": "extracted value or 'Not found'",
+      "value": "extracted value or Not found",
       "risk": "low|medium|high|unknown",
-      "explanation": "Plain language explanation of this term and why the risk level was assigned (2-3 sentences)",
-      "citation": "Relevant regulation or 'No specific regulation applies'",
+      "explanation": "Plain language explanation (2-3 sentences, no quotes or special chars)",
+      "citation": "Relevant regulation code or No specific regulation",
       "market_note": "How this compares to typical Seattle market rates",
-      "source_text": "The exact verbatim phrase (10-25 words) from the document that supports this value. Empty string if not found.",
-      "source_page": "Page number (integer) where this term appears in the document. 0 if not found."
+      "source_text": "Brief verbatim phrase (10-25 words) from document, or empty string",
+      "source_page": 0
     }
   ]
 }
 
 Include these term IDs: security_deposit, monthly_rent, lease_term, late_fee, early_termination, pet_policy, landlord_entry, utilities, parking, rent_increase, subletting.
 If a term is not found in the lease, set value to "Not found" and risk to "unknown".
-`.trim();
-}
-
-// Task 2 Prompt
-function buildPriorityPrompt(summary, selectedTags, freeText) {
-  return `
-You are helping a renter understand which parts of their lease are most relevant to their personal situation.
-
-LEASE SUMMARY (already extracted):
-${JSON.stringify(summary, null, 2)}
-
-USER'S STATED PRIORITIES:
-- Selected tags: ${selectedTags.join(', ') || 'none'}
-- In their own words: "${freeText || 'not specified'}"
-
-Return ONLY valid JSON — no markdown, no explanation outside the JSON.
-
-{
-  "focused_terms": [
-    {
-      "label": "Term name",
-      "lease_says": "What the lease actually says about this (quote or paraphrase)",
-      "relevant_because": "1-2 sentence explanation of why this is relevant to what the user said",
-      "severity": "ok|caution|alert",
-      "action": "Specific thing the user should do or ask before signing (1 sentence)"
-    }
-  ]
-}
-
-Include only terms that are directly relevant to the user's priorities.
-Order by severity: alert first, then caution, then ok.
-If the lease doesn't mention something the user cares about, include it with severity "caution" and explain that it's undisclosed.
+Keep all string values simple - avoid special characters, quotes within quotes, or line breaks.
 `.trim();
 }
 
@@ -385,75 +485,149 @@ Reply in this exact JSON format (no markdown):
   });
 }
 
-// Priority Tag Selection 
-const selectedTags = new Set();
-document.querySelectorAll('.priority-tag').forEach(tag => {
-  tag.addEventListener('click', () => {
-    const val = tag.dataset.tag;
-    if (selectedTags.has(val)) {
-      selectedTags.delete(val);
-      tag.classList.remove('selected');
-    } else {
-      selectedTags.add(val);
-      tag.classList.add('selected');
-    }
-  });
+// Memories toggle
+memoriesToggle.addEventListener('click', () => {
+  memoriesSection.classList.toggle('open');
+});
+document.querySelector('.memories-header').addEventListener('click', () => {
+  memoriesSection.classList.toggle('open');
 });
 
-// Personalized Submit button
-prioritySubmitBtn.addEventListener('click', async () => {
-  if (!leaseSummaryCache) return;
-  const freeText = priorityFreeText.value.trim();
-  if (selectedTags.size === 0 && !freeText) {
-    alert('Please select at least one priority or describe what matters to you.');
+// Render the memories list
+async function renderMemories() {
+  const categories = await loadCustomCategories();
+  
+  if (categories.length === 0) {
+    memoriesSection.style.display = 'none';
     return;
   }
+  
+  memoriesSection.style.display = 'block';
+  memoriesList.innerHTML = '';
+  
+  categories.forEach(cat => {
+    const item = document.createElement('div');
+    item.className = 'memory-item';
+    item.innerHTML = `
+      <span class="memory-name">${cat}</span>
+      <button class="memory-delete" data-category="${cat}">×</button>
+    `;
+    memoriesList.appendChild(item);
+  });
+  
+  // Setup delete handlers
+  memoriesList.querySelectorAll('.memory-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const category = btn.dataset.category;
+      await removeCustomCategory(category);
+      
+      // Remove from current analysis if present
+      if (leaseSummaryCache) {
+        const id = category.toLowerCase().replace(/\s+/g, '_');
+        leaseSummaryCache = leaseSummaryCache.filter(t => t.id !== id);
+        renderTerms(leaseSummaryCache);
+      }
+      
+      renderMemories();
+    });
+  });
+}
 
-  prioritySubmitBtn.disabled = true;
-  prioritySubmitBtn.textContent = 'Analyzing…';
-
+// Add Category Button handler
+priorityAddBtn.addEventListener('click', async () => {
+  const userInput = priorityFreeText.value.trim();
+  if (!userInput) return;
+  
+  priorityAddBtn.disabled = true;
+  priorityAddBtn.textContent = '...';
+  
   try {
-    const prompt = buildPriorityPrompt(leaseSummaryCache, [...selectedTags], freeText);
-    const raw = await callGemini(prompt);
-    const parsed = JSON.parse(raw);
-    renderPriorityCards(parsed.focused_terms);
-    priorityResults.style.display = 'block';
-    priorityResults.scrollIntoView({ behavior: 'smooth' });
+    // Normalize the category name using AI
+    const normalizedName = await normalizeCategoryName(userInput);
+    
+    // Check if already saved
+    const existing = await loadCustomCategories();
+    if (existing.some(c => c.toLowerCase() === normalizedName.toLowerCase())) {
+      alert(`"${normalizedName}" is already saved.`);
+      priorityFreeText.value = '';
+      return;
+    }
+    
+    // Save the new category
+    await saveCustomCategory(normalizedName);
+    
+    // Analyze immediately for current lease if we have it
+    if (leaseSummaryCache) {
+      await analyzeCustomCategory(normalizedName);
+    }
+    
+    // Update memories display
+    renderMemories();
+    
+    priorityFreeText.value = '';
   } catch (err) {
-    alert('Error re-focusing: ' + err.message);
+    console.error('Error adding category:', err);
+    alert('Error adding topic: ' + err.message);
   } finally {
-    prioritySubmitBtn.disabled = false;
-    prioritySubmitBtn.textContent = 'Re-focus analysis for me';
+    priorityAddBtn.disabled = false;
+    priorityAddBtn.textContent = '+ Add';
   }
 });
 
-// Render Priority Cards
-function renderPriorityCards(focusedTerms) {
-  priorityCardsList.innerHTML = '';
-  focusedTerms.forEach(item => {
-    const card = document.createElement('div');
-    card.className = 'focused-card';
+// Enter key in input triggers Add
+priorityFreeText.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    priorityAddBtn.click();
+  }
+});
 
-    const relevanceClass = {
-      ok: 'relevance-ok',
-      caution: 'relevance-warning',
-      alert: 'relevance-alert'
-    }[item.severity] || 'relevance-ok';
+// Analyze a custom category and add it as a new term card
+async function analyzeCustomCategory(category) {
+  const pdfBase64 = await getPDFBase64();
+  
+  const prompt = `
+You are analyzing the attached residential lease PDF for a specific topic the user cares about.
 
-    const icon = { ok: '✓', caution: '⚠', alert: '✕' }[item.severity] || '';
+TOPIC TO ANALYZE: "${category}"
 
-    card.innerHTML = `
-      <div class="focused-header">
-        <div class="focused-title">${icon} ${item.label}</div>
-        <div class="focused-lease-text">"${item.lease_says}"</div>
-        <div class="focused-relevance ${relevanceClass}">${item.relevant_because}</div>
-      </div>
-      <div style="padding: 10px 14px; font-size: 12px; color: #9aacbc; border-top: 1px solid var(--border)">
-        <strong style="color: var(--gold);">Action:</strong> ${item.action}
-      </div>
-    `;
-    priorityCardsList.appendChild(card);
-  });
+Return ONLY valid JSON - no markdown, no code blocks, no explanation outside the JSON.
+
+{
+  "id": "${category.toLowerCase().replace(/\s+/g, '_')}",
+  "label": "${category}",
+  "value": "What the lease says about this topic, or Not found if not mentioned",
+  "risk": "low|medium|high|unknown",
+  "explanation": "Plain language explanation (2-3 sentences)",
+  "citation": "Relevant regulation or No specific regulation",
+  "market_note": "How this compares to typical Seattle rentals",
+  "source_text": "Brief verbatim phrase from document or empty string",
+  "source_page": 0
+}
+
+If the lease does not mention this topic at all, set value to "Not found" and risk to "unknown".
+Keep all string values simple - no special characters or quotes within quotes.
+`.trim();
+
+  const raw = await callGemini(prompt, pdfBase64);
+  const newTerm = parseGeminiJSON(raw);
+  
+  // Add to cache and re-render (avoid duplicates)
+  const existingIndex = leaseSummaryCache.findIndex(t => t.id === newTerm.id);
+  if (existingIndex >= 0) {
+    leaseSummaryCache[existingIndex] = newTerm;
+  } else {
+    leaseSummaryCache.push(newTerm);
+  }
+  renderTerms(leaseSummaryCache);
+  
+  // Scroll to and highlight the new card
+  const newCard = document.querySelector(`.term-card[data-id="${newTerm.id}"]`);
+  if (newCard) {
+    newCard.classList.add('open', 'just-added');
+    newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => newCard.classList.remove('just-added'), 2000);
+  }
 }
 
 // Run Analysis on Load
@@ -470,20 +644,45 @@ async function runAnalysis() {
     setLoadingStep('Analyzing with AI…');
     const prompt = buildSummaryPrompt(regulations);
     const raw = await callGemini(prompt, pdfBase64);
+    const parsed = parseGeminiJSON(raw);
 
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      // Try to pull JSON out of a markdown code block if Gemini wraps it
-      const match = raw.match(/```(?:json)?\n?([\s\S]+?)\n?```/);
-      if (match) parsed = JSON.parse(match[1]);
-      else throw new Error('Could not parse AI response as JSON');
+    // Also analyze any saved custom categories
+    const customCategories = await loadCustomCategories();
+    const customTerms = [];
+    for (const cat of customCategories) {
+      try {
+        setLoadingStep(`Analyzing "${cat}"…`);
+        const catPrompt = `
+You are analyzing the attached residential lease PDF for a specific topic.
+
+TOPIC: "${cat}"
+
+Return ONLY valid JSON - no markdown, no code blocks:
+{
+  "id": "${cat.toLowerCase().replace(/\s+/g, '_')}",
+  "label": "${cat}",
+  "value": "What the lease says, or Not found",
+  "risk": "low|medium|high|unknown",
+  "explanation": "2-3 sentence explanation",
+  "citation": "Relevant regulation or No specific regulation",
+  "market_note": "Market comparison",
+  "source_text": "",
+  "source_page": 0
+}
+
+Keep all string values simple - no special characters or quotes within quotes.
+`.trim();
+        const catRaw = await callGemini(catPrompt, pdfBase64);
+        customTerms.push(parseGeminiJSON(catRaw));
+      } catch { /* skip failed custom categories */ }
     }
 
-    leaseSummaryCache = parsed.terms;
-    renderTerms(parsed.terms);
+    leaseSummaryCache = [...parsed.terms, ...customTerms];
+    renderTerms(leaseSummaryCache);
     showState('Results');
+    
+    // Show saved custom topics in memories section
+    await renderMemories();
 
   } catch (err) {
     stateLoading.classList.remove('active');
