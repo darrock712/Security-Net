@@ -117,6 +117,14 @@
       50% { border-color: var(--gold); }
     }
 
+    .subtopic-card {
+      margin-left: 18px;
+      border-left: 3px solid var(--gold) !important;
+      opacity: 0.92;
+    }
+    .subtopic-card .term-name { font-size: 12px; color: var(--muted); }
+    .subtopic-card .term-value { display: none; }
+
     .term-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 11px 14px; cursor: pointer;
@@ -186,13 +194,28 @@
     /* Term Actions Row (jump + correction buttons) */
     .term-actions-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 
-    /* Jump to Source Button */
-    .jump-btn {
-      background: none; border: 1px solid var(--border);
-      color: var(--muted); font-size: 11px; padding: 4px 10px;
-      border-radius: 4px; cursor: pointer; font-family: 'DM Sans', sans-serif;
+    .term-explanation.has-source {
+      cursor: pointer;
+      transition: background 0.15s;
+      border-radius: 4px;
+      padding: 4px 6px;
+      margin: -4px -6px 10px;
     }
-    .jump-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .term-explanation.has-source:hover {
+      background: var(--surface2);
+      outline: 1px solid var(--border);
+    }
+    .source-hint {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 10px;
+      color: var(--muted);
+      font-style: italic;
+      vertical-align: middle;
+    }
+    .term-explanation.has-source:hover .source-hint {
+      color: var(--gold);
+    }
 
     /* Correction Button */
     .correct-row { margin-top: 8px; }

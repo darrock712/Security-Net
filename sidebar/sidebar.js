@@ -238,7 +238,7 @@ function renderTerms(terms) {
   termsList.innerHTML = '';
   terms.forEach(term => {
     const card = document.createElement('div');
-    card.className = `term-card risk-${term.risk}`;
+    card.className = `term-card risk-${term.risk}${term.isSubtopic ? ' subtopic-card' : ''}`;
     card.dataset.id = term.id;
 
     const riskLabel = { low: 'Standard', medium: 'Review', high: 'Flagged', unknown: 'Not found' }[term.risk] || '';
@@ -256,7 +256,12 @@ function renderTerms(terms) {
         </div>
       </div>
       <div class="term-body">
-        <div class="term-explanation">${term.explanation}</div>
+        <div class="term-explanation ${term.source_text ? 'has-source' : ''}"
+            data-term-id="${term.id}"
+            title="${term.source_text ? 'Click to highlight in lease' : ''}">
+          ${term.explanation}
+          ${term.source_text ? `<span class="source-hint">📄 pg. ${term.source_page || '?'}</span>` : ''}
+        </div>
         <div class="term-meta">
           <span class="meta-badge ${badgeClass}">${riskLabel}</span>
           ${term.market_note ? `<span class="meta-badge badge-gray">${term.market_note}</span>` : ''}
@@ -270,21 +275,14 @@ function renderTerms(terms) {
           </div>
           <label style="display:flex;align-items:center;gap:6px;margin-top:7px;cursor:pointer;">
             <input type="checkbox" class="save-subq-checkbox" data-term-id="${term.id}" style="accent-color:var(--gold);cursor:pointer;">
-            <span style="font-size:11px;color:var(--muted);">Save this question as a custom topic for future leases</span>
+            <span style="font-size:11px;color:var(--muted);">Save as subtopic under ${term.label}</span>
           </label>
           <div class="followup-response" id="followup-${term.id}"></div>
         </div>
-        ${term.source_text ? `
-        <div class="source-quote">
-          <span class="source-quote-label">Found on page ${term.source_page || '?'}:</span>
-          <span class="source-quote-text">"${term.source_text}"</span>
-        </div>` : ''}
-        <div class="term-actions-row">
-          ${term.source_text ? `<button class="jump-btn" data-term-id="${term.id}">↗ Jump to page ${term.source_page || '?'}</button>` : ''}
-        </div>
-        <div class="correct-row">
-          <button class="correct-btn" data-term-id="${term.id}">✎ This looks wrong</button>
-        </div>
+          <div class="term-actions-row">
+            <button class="correct-btn" data-term-id="${term.id}">✎ This looks wrong</button>
+          </div>
+          <div class="correct-row"></div>
       </div>
     `;
 
@@ -305,10 +303,10 @@ function renderTerms(terms) {
     });
   });
 
-  // Jump to source handlers
-  document.querySelectorAll('.jump-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const term = leaseSummaryCache?.find(t => t.id === btn.dataset.termId);
+  // Clicking explanation jumps + highlights in PDF
+  document.querySelectorAll('.term-explanation.has-source').forEach(el => {
+    el.addEventListener('click', () => {
+      const term = leaseSummaryCache?.find(t => t.id === el.dataset.termId);
       if (term) handleJump(term.source_text, term.source_page);
     });
   });
@@ -326,15 +324,6 @@ async function handleFollowUp(termId) {
   const responseEl = document.getElementById(`followup-${termId}`);
   const question = input.value.trim();
   if (!question) return;
-
-  // Save as custom topic if checkbox is checked
-  const saveCheckbox = document.querySelector(`.save-subq-checkbox[data-term-id="${termId}"]`);
-  if (saveCheckbox && saveCheckbox.checked) {
-    const normalized = await normalizeCategoryName(question);
-    await saveCustomCategory(normalized);
-    await renderMemories();
-    saveCheckbox.checked = false;
-  }
 
   const term = leaseSummaryCache?.find(t => t.id === termId);
   if (!term) return;
@@ -362,6 +351,38 @@ Do not give legal advice — explain and inform. If uncertain, say so clearly.
     responseEl.textContent = answer;
     responseEl.style.display = 'block';
     input.value = '';
+
+    // Save as sub-topic if checkbox is checked
+    const saveCheckbox = document.querySelector(`.save-subq-checkbox[data-term-id="${termId}"]`);
+    if (saveCheckbox && saveCheckbox.checked) {
+      const subId = `${termId}_sub_${Date.now()}`;
+      const subTerm = {
+        id: subId,
+        label: question,
+        value: '',
+        risk: term.risk,
+        explanation: answer,
+        citation: term.citation,
+        market_note: '',
+        source_text: '',
+        source_page: term.source_page,
+        parentId: termId,
+        isSubtopic: true
+      };
+      const parentIdx = leaseSummaryCache.findIndex(t => t.id === termId);
+      leaseSummaryCache.splice(parentIdx + 1, 0, subTerm);
+      renderTerms(leaseSummaryCache);
+
+      const parentCard = document.querySelector(`.term-card[data-id="${termId}"]`);
+      if (parentCard) parentCard.classList.add('open');
+      const subCard = document.querySelector(`.term-card[data-id="${subId}"]`);
+      if (subCard) {
+        subCard.classList.add('just-added');
+        subCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => subCard.classList.remove('just-added'), 2000);
+      }
+      saveCheckbox.checked = false;
+    }
   } catch (err) {
     responseEl.textContent = 'Error: ' + err.message;
     responseEl.style.display = 'block';
