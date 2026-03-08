@@ -171,6 +171,45 @@ function removeCustomCategory(category) {
   });
 }
 
+// Save a subtopic question linked to a parent term
+function saveSubtopic(parentId, question) {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['savedSubtopics'], ({ savedSubtopics }) => {
+      const existing = savedSubtopics || [];
+      const alreadySaved = existing.some(s => s.parentId === parentId && s.question === question);
+      if (!alreadySaved) {
+        existing.push({ parentId, question });
+        chrome.storage.local.set({ savedSubtopics: existing }, resolve);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+// Load all saved subtopics
+function loadSavedSubtopics() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['savedSubtopics'], ({ savedSubtopics }) => {
+      resolve(savedSubtopics || []);
+    });
+  });
+}
+
+// Remove a saved subtopic
+function removeSavedSubtopic(parentId, question) {
+  return new Promise(resolve => {
+    chrome.storage.local.get(['savedSubtopics'], ({ savedSubtopics }) => {
+      const updated = (savedSubtopics || []).filter(
+        s => !(s.parentId === parentId && s.question === question)
+      );
+      chrome.storage.local.set({ savedSubtopics: updated }, resolve);
+    });
+  });
+}
+
+
+
 // Use AI to normalize user input into a clean category name
 async function normalizeCategoryName(userInput) {
   const prompt = `
@@ -244,6 +283,7 @@ function renderTerms(terms) {
     const riskLabel = { low: 'Standard', medium: 'Review', high: 'Flagged', unknown: 'Not found' }[term.risk] || '';
     const badgeClass = { low: 'badge-green', medium: 'badge-yellow', high: 'badge-red', unknown: 'badge-gray' }[term.risk] || 'badge-gray';
 
+
     card.innerHTML = `
       <div class="term-header">
         <div class="term-left">
@@ -252,7 +292,7 @@ function renderTerms(terms) {
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span class="term-value">${term.value}</span>
-          <span class="expand-arrow">▼</span>
+          ${term.isSubtopic ? `<button class="subtopic-delete" data-term-id="${term.id}">×</button>` : `<span class="expand-arrow">▼</span>`}
         </div>
       </div>
       <div class="term-body">
@@ -330,6 +370,21 @@ function renderTerms(terms) {
     btn.addEventListener('click', () => handleCorrection(btn.dataset.termId));
   });
 }
+  // Delete subtopic handlers
+  document.querySelectorAll('.subtopic-delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const termId = btn.dataset.termId;
+      const term = leaseSummaryCache?.find(t => t.id === termId);
+      if (term?.savedQuestion && term?.parentId) {
+        await removeSavedSubtopic(term.parentId, term.savedQuestion);
+        await renderMemories();
+      }
+      leaseSummaryCache = leaseSummaryCache.filter(t => t.id !== termId);
+      renderTerms(leaseSummaryCache);
+    });
+  });
 
 // Follow up Question Handler
 async function handleFollowUp(termId) {
@@ -368,33 +423,40 @@ Do not give legal advice — explain and inform. If uncertain, say so clearly.
 
     // Save as sub-topic if checkbox is checked
     const saveCheckbox = document.querySelector(`.save-subq-checkbox[data-term-id="${termId}"]`);
-    if (saveCheckbox && saveCheckbox.checked) {
-      const subId = `${termId}_sub_${Date.now()}`;
-      const subTerm = {
-        id: subId,
-        label: question,
-        value: '',
-        risk: term.risk,
-        explanation: answer,
-        citation: term.citation,
-        market_note: '',
-        source_text: '',
-        source_page: term.source_page,
-        parentId: termId,
-        isSubtopic: true
-      };
-      const parentIdx = leaseSummaryCache.findIndex(t => t.id === termId);
-      leaseSummaryCache.splice(parentIdx + 1, 0, subTerm);
-      renderTerms(leaseSummaryCache);
+    const shouldSave = saveCheckbox && saveCheckbox.checked;
 
-      const parentCard = document.querySelector(`.term-card[data-id="${termId}"]`);
-      if (parentCard) parentCard.classList.add('open');
-      const subCard = document.querySelector(`.term-card[data-id="${subId}"]`);
-      if (subCard) {
-        subCard.classList.add('just-added');
-        subCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => subCard.classList.remove('just-added'), 2000);
-      }
+    const subId = `${termId}_sub_${Date.now()}`;
+    const subTerm = {
+      id: subId,
+      label: question,
+      value: '',
+      risk: term.risk,
+      explanation: answer,
+      citation: term.citation,
+      market_note: '',
+      source_text: '',
+      source_page: term.source_page,
+      parentId: termId,
+      isSubtopic: true,
+      savedQuestion: shouldSave ? question : null
+    };
+
+    const parentIdx = leaseSummaryCache.findIndex(t => t.id === termId);
+    leaseSummaryCache.splice(parentIdx + 1, 0, subTerm);
+    renderTerms(leaseSummaryCache);
+
+    const parentCard = document.querySelector(`.term-card[data-id="${termId}"]`);
+    if (parentCard) parentCard.classList.add('open');
+    const subCard = document.querySelector(`.term-card[data-id="${subId}"]`);
+    if (subCard) {
+      subCard.classList.add('just-added');
+      subCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => subCard.classList.remove('just-added'), 2000);
+    }
+
+    if (shouldSave) {
+      await saveSubtopic(termId, question);
+      await renderMemories();
       saveCheckbox.checked = false;
     }
   } catch (err) {
@@ -596,6 +658,45 @@ async function renderMemories() {
     `;
     memoriesList.appendChild(item);
   });
+
+  const subtopics = await loadSavedSubtopics();
+  if (subtopics.length > 0) {
+    const subHeader = document.createElement('div');
+    subHeader.style.cssText = 'font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px;';
+    subHeader.textContent = 'Saved Follow-ups';
+    memoriesList.appendChild(subHeader);
+
+    subtopics.forEach(sub => {
+      const item = document.createElement('div');
+      item.className = 'memory-item';
+      item.innerHTML = `
+        <div>
+          <div class="memory-name">${sub.question}</div>
+          <div style="font-size:10px;color:var(--muted);">under ${sub.parentId.replace(/_/g,' ')}</div>
+        </div>
+        <button class="memory-delete" data-parent-id="${sub.parentId}" data-question="${sub.question}">×</button>
+      `;
+      memoriesList.appendChild(item);
+    });
+
+    memoriesList.querySelectorAll('.memory-delete[data-question]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const parentId = btn.dataset.parentId;
+        const question = btn.dataset.question;
+        await removeSavedSubtopic(parentId, question);
+
+        // Also remove from current session if it exists
+        if (leaseSummaryCache) {
+          leaseSummaryCache = leaseSummaryCache.filter(t =>
+            !(t.isSubtopic && t.parentId === parentId && t.savedQuestion === question)
+          );
+          renderTerms(leaseSummaryCache);
+        }
+
+        await renderMemories();
+      });
+    });
+  }
   
   // Setup delete handlers
   memoriesList.querySelectorAll('.memory-delete').forEach(btn => {
@@ -712,6 +813,56 @@ Keep all string values simple - no special characters or quotes within quotes.
   }
 }
 
+async function analyzeSubtopic(parentId, question) {
+  const parent = leaseSummaryCache?.find(t => t.id === parentId);
+  if (!parent) return;
+
+  const pdfBase64 = await getPDFBase64();
+  const prompt = `
+You are analyzing a residential lease PDF for a specific follow-up question about a clause.
+
+Parent clause: ${parent.label}
+Parent value: ${parent.value}
+Parent explanation: ${parent.explanation}
+
+Follow-up question: "${question}"
+
+Answer in 2-4 sentences. Be specific and grounded in the lease. Do not give legal advice — explain and inform.
+Return ONLY the answer text, no JSON, no markdown.
+  `.trim();
+
+  const answer = await callGemini(prompt, pdfBase64);
+
+  const subId = `${parentId}_sub_${Date.now()}`;
+  const subTerm = {
+    id: subId,
+    label: question,
+    value: '',
+    risk: parent.risk,
+    explanation: answer,
+    citation: parent.citation,
+    market_note: '',
+    source_text: '',
+    source_page: parent.source_page,
+    parentId,
+    isSubtopic: true,
+    savedQuestion: question
+  };
+
+  const parentIdx = leaseSummaryCache.findIndex(t => t.id === parentId);
+  leaseSummaryCache.splice(parentIdx + 1, 0, subTerm);
+  renderTerms(leaseSummaryCache);
+
+  const parentCard = document.querySelector(`.term-card[data-id="${parentId}"]`);
+  if (parentCard) parentCard.classList.add('open');
+  const subCard = document.querySelector(`.term-card[data-id="${subId}"]`);
+  if (subCard) {
+    subCard.classList.add('just-added');
+    subCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => subCard.classList.remove('just-added'), 2000);
+  }
+}
+
 // Run Analysis on Load
 async function runAnalysis() {
   showState('Loading');
@@ -765,6 +916,15 @@ Keep all string values simple - no special characters or quotes within quotes.
     
     // Show saved custom topics in memories section
     await renderMemories();
+
+    // Re-analyze saved subtopics fresh against new lease
+    const savedSubtopics = await loadSavedSubtopics();
+    for (const sub of savedSubtopics) {
+      try {
+        setLoadingStep(`Analyzing saved question: "${sub.question}"…`);
+        await analyzeSubtopic(sub.parentId, sub.question);
+      } catch { /* skip failed subtopics */ }
+    }
 
   } catch (err) {
     stateLoading.classList.remove('active');
