@@ -369,8 +369,7 @@ function renderTerms(terms) {
   document.querySelectorAll('.correct-btn').forEach(btn => {
     btn.addEventListener('click', () => handleCorrection(btn.dataset.termId));
   });
-}
-  // Delete subtopic handlers
+    // Delete subtopic handlers
   document.querySelectorAll('.subtopic-delete').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -385,6 +384,8 @@ function renderTerms(terms) {
       renderTerms(leaseSummaryCache);
     });
   });
+}
+
 
 // Follow up Question Handler
 async function handleFollowUp(termId) {
@@ -640,12 +641,13 @@ document.querySelector('.memories-header').addEventListener('click', () => {
 // Render the memories list
 async function renderMemories() {
   const categories = await loadCustomCategories();
-  
-  if (categories.length === 0) {
+  const subtopics = await loadSavedSubtopics();
+
+  if (categories.length === 0 && subtopics.length === 0) {
     memoriesSection.style.display = 'none';
     return;
   }
-  
+
   memoriesSection.style.display = 'block';
   memoriesList.innerHTML = '';
   
@@ -659,7 +661,6 @@ async function renderMemories() {
     memoriesList.appendChild(item);
   });
 
-  const subtopics = await loadSavedSubtopics();
   if (subtopics.length > 0) {
     const subHeader = document.createElement('div');
     subHeader.style.cssText = 'font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px;';
