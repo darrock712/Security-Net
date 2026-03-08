@@ -218,7 +218,7 @@ Return this exact JSON structure:
       "label": "Security Deposit",
       "value": "extracted value or Not found",
       "risk": "low|medium|high|unknown",
-      "explanation": "Plain language explanation (2-3 sentences, no quotes or special chars)",
+      "explanation": "Plain language explanation (2-3 sentences). Wrap key lease terms or values in [[ ]] like [[one cat allowed under 20 lbs]] or [[$300 pet deposit]] so they can be linked to the source.",
       "citation": "Relevant regulation code or No specific regulation",
       "market_note": "How this compares to typical Seattle market rates",
       "source_text": "Brief verbatim phrase (10-25 words) from document, or empty string",
@@ -259,7 +259,10 @@ function renderTerms(terms) {
         <div class="term-explanation ${term.source_text ? 'has-source' : ''}"
             data-term-id="${term.id}"
             title="${term.source_text ? 'Click to highlight in lease' : ''}">
-          ${term.explanation}
+          ${term.source_text
+            ? term.explanation.replace(/\[\[(.+?)\]\]/g, (_, phrase) =>
+                `<span class="highlight-phrase" data-phrase="${phrase}" data-term-id="${term.id}">${phrase}</span>`)
+            : term.explanation}
           ${term.source_text ? `<span class="source-hint">📄 pg. ${term.source_page || '?'}</span>` : ''}
         </div>
         <div class="term-meta">
@@ -303,11 +306,22 @@ function renderTerms(terms) {
     });
   });
 
-  // Clicking explanation jumps + highlights in PDF
+  // Clicking the whole explanation still jumps to the page
   document.querySelectorAll('.term-explanation.has-source').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      // Don't double-fire if a phrase span was clicked
+      if (e.target.classList.contains('highlight-phrase')) return;
       const term = leaseSummaryCache?.find(t => t.id === el.dataset.termId);
       if (term) handleJump(term.source_text, term.source_page);
+    });
+  });
+
+  // Clicking a specific phrase jumps + searches that exact phrase
+  document.querySelectorAll('.highlight-phrase').forEach(span => {
+    span.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const term = leaseSummaryCache?.find(t => t.id === span.dataset.termId);
+      if (term) handleJump(span.dataset.phrase, term.source_page);
     });
   });
 
