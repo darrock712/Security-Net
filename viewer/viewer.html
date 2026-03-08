@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Net - Document Viewer</title>
+  <link rel="stylesheet" href="../node_modules/@epam/pdf-highlighter-kit/dist/pdf-highlight-viewer.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+    :root {
+      --bg: #0f1923;
+      --surface: #162030;
+      --surface2: #1e2d3d;
+      --border: #253545;
+      --gold: #c8b88a;
+      --gold-light: #e8d8aa;
+      --text: #d8e4f0;
+      --muted: #7a8a9a;
+      --green: #3db87a;
+      --yellow: #e0b040;
+      --red: #e05050;
+      --green-bg: #0a2018;
+      --yellow-bg: #231800;
+      --red-bg: #200a0a;
+      --sidebar-w: 320px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .viewer-header {
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      gap: 16px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon { font-size: 18px; }
+    .logo-text {
+      font-family: 'DM Serif Display', serif;
+      font-size: 16px;
+      color: var(--gold);
+      white-space: nowrap;
+    }
+
+    .header-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .page-title {
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* Term chips */
+    .term-chips {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .term-chip {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .term-chip:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: rgba(200, 184, 138, 0.08);
+    }
+
+    .term-chip.active {
+      border-color: var(--gold);
+      background: #2a2010;
+      color: var(--gold);
+    }
+
+    .term-chip.risk-high { border-left: 3px solid var(--red); }
+    .term-chip.risk-medium { border-left: 3px solid var(--yellow); }
+    .term-chip.risk-low { border-left: 3px solid var(--green); }
+
+    /* Zoom controls */
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .zoom-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 16px;
+      width: 30px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 5px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.15s;
+      line-height: 1;
+    }
+
+    .zoom-btn:hover {
+      background: var(--border);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .zoom-level {
+      font-size: 11px;
+      color: var(--muted);
+      min-width: 38px;
+      text-align: center;
+      user-select: none;
+    }
+
+    .close-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 5px 14px;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .close-btn:hover {
+      background: var(--surface2);
+      color: var(--text);
+      border-color: var(--text);
+    }
+
+    /* ── Main area: PDF + sidebar side by side ── */
+    .viewer-body {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    #viewerContainer {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Right sidebar panel ── */
+    .info-panel {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .info-panel-header {
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+      font-family: 'DM Serif Display', serif;
+      font-size: 14px;
+      color: var(--gold);
+      flex-shrink: 0;
+    }
+
+    .info-panel-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .info-panel-scroll::-webkit-scrollbar { width: 4px; }
+    .info-panel-scroll::-webkit-scrollbar-track { background: transparent; }
+    .info-panel-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Term cards (accordion) ── */
+    .panel-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+
+    .panel-card:hover { border-color: #3a5a7a; }
+    .panel-card.risk-low    { border-left: 3px solid var(--green); }
+    .panel-card.risk-medium { border-left: 3px solid var(--yellow); }
+    .panel-card.risk-high   { border-left: 3px solid var(--red); }
+    .panel-card.risk-unknown { border-left: 3px solid var(--muted); }
+
+    .panel-card.active { border-color: var(--gold); }
+
+    .panel-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      cursor: pointer;
+      gap: 8px;
+    }
+
+    .panel-card-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .panel-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .panel-dot.low    { background: var(--green); }
+    .panel-dot.medium { background: var(--yellow); }
+    .panel-dot.high   { background: var(--red); }
+    .panel-dot.unknown { background: var(--muted); }
+
+    .panel-card-label {
+      font-weight: 500;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .panel-card-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .panel-card-value {
+      font-size: 11px;
+      color: var(--gold);
+      font-weight: 500;
+      max-width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .panel-arrow {
+      color: var(--muted);
+      font-size: 10px;
+      transition: transform 0.2s;
+    }
+
+    .panel-card.open .panel-arrow { transform: rotate(180deg); }
+
+    /* Expanded body */
+    .panel-card-body {
+      display: none;
+      padding: 0 12px 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .panel-card.open .panel-card-body { display: block; }
+
+    .panel-risk-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+      margin-top: 10px;
+      margin-bottom: 8px;
+    }
+
+    .panel-risk-badge.low    { background: var(--green-bg); color: var(--green); border: 1px solid #1a4a30; }
+    .panel-risk-badge.medium { background: var(--yellow-bg); color: var(--yellow); border: 1px solid #3a2800; }
+    .panel-risk-badge.high   { background: var(--red-bg); color: var(--red); border: 1px solid #3a1010; }
+    .panel-risk-badge.unknown { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+    .panel-explanation {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+
+    .panel-citation {
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .panel-market {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      padding: 6px 8px;
+      background: var(--surface2);
+      border-radius: 4px;
+    }
+
+    .panel-matches {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 8px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ── Loading overlay ── */
+    #loadingOverlay {
+      position: absolute;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    #loadingOverlay.hidden { display: none; }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-family: 'DM Serif Display', serif;
+      font-size: 16px;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+
+    .loading-step {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── Dark theme overrides for pdf-highlight-viewer ── */
+    .pdf-highlight-viewer {
+      background: var(--bg) !important;
+    }
+
+    .pdf-page-container {
+      background: white !important;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    /* Click flash on highlights */
+    .highlight-click-flash {
+      animation: highlightFlash 0.4s ease-out;
+    }
+    @keyframes highlightFlash {
+      0%   { filter: brightness(2.5); transform: scale(1.06); }
+      100% { filter: brightness(1);   transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="viewer-header">
+    <div class="header-left">
+      <span class="logo-icon">🛡</span>
+      <span class="logo-text">Security Net</span>
+      <div class="header-sep"></div>
+      <span class="page-title">Document Viewer</span>
+    </div>
+    <div class="term-chips" id="termChips"></div>
+    <div class="zoom-controls">
+      <button class="zoom-btn" id="zoomOut" title="Zoom out">−</button>
+      <span class="zoom-level" id="zoomLevel">150%</span>
+      <button class="zoom-btn" id="zoomIn" title="Zoom in">+</button>
+      <button class="zoom-btn" id="zoomReset" title="Reset zoom" style="font-size:11px;">Reset</button>
+    </div>
+    <button class="close-btn" id="closeBtn">Close</button>
+  </div>
+
+  <!-- Body: PDF viewer + sidebar -->
+  <div class="viewer-body">
+    <!-- PDF viewer -->
+    <div id="viewerContainer">
+      <div id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading document</div>
+        <div class="loading-step" id="loadingStep">Preparing viewer...</div>
+      </div>
+    </div>
+
+    <!-- Right info panel -->
+    <div class="info-panel">
+      <div class="info-panel-header">Lease Terms</div>
+      <div class="info-panel-scroll" id="panelCards"></div>
+    </div>
+  </div>
+
+  <script src="viewer.bundle.js"></script>
+</body>
+</html>

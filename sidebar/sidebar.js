@@ -14,6 +14,11 @@ const memoriesToggle    = document.getElementById('memoriesToggle');
 
 // Stores the lease summary so Task 2 can use it
 let leaseSummaryCache = null;
+// Stores extracted sections for follow-up context
+let viewerSectionsCache = null;
+
+// Set pdf.js worker source
+pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('lib/pdf.worker.min.js');
 
 // Close Button
 document.getElementById('closeBtn').addEventListener('click', () => {
@@ -39,13 +44,13 @@ async function loadRegulations() {
   return res.json();
 }
 
-// Call Gemini via the background service worker (optional pdfBase64 for inline PDF)
-function callGemini(prompt, pdfBase64) {
+// Call Gemini via the background service worker (optional pdfBase64 and schema for structured output)
+function callGemini(prompt, pdfBase64, schema) {
   return new Promise((resolve, reject) => {
     chrome.storage.local.get(['apiKey'], ({ apiKey }) => {
       if (!apiKey) { reject(new Error('No API key')); return; }
       chrome.runtime.sendMessage(
-        { action: 'callGemini', prompt, apiKey, pdfBase64 },
+        { action: 'callGemini', prompt, apiKey, pdfBase64, schema },
         (res) => {
           if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); return; }
           if (!res.success) { reject(new Error(res.error)); return; }
@@ -403,6 +408,17 @@ async function handleFollowUp(termId) {
   responseEl.style.display = 'none';
 
   try {
+    // Include relevant section text for better context
+    let sectionContext = '';
+    if (viewerSectionsCache && term.source_sections?.length > 0) {
+      const relevantTexts = term.source_sections
+        .map(i => viewerSectionsCache[i])
+        .filter(Boolean)
+        .map(s => `[${s.heading}]: ${s.text.substring(0, 800)}`)
+        .join('\n\n');
+      sectionContext = `\n\nRELEVANT LEASE SECTIONS:\n${relevantTexts}`;
+    }
+
     const prompt = `
 A renter is reviewing their lease. They are looking at this clause:
 
@@ -410,10 +426,11 @@ Term: ${term.label}
 Value: ${term.value}
 Full context: ${term.explanation}
 Regulation note: ${term.citation}
+${sectionContext}
 
 Their question: "${question}"
 
-Answer in 2-4 sentences. Be specific and grounded in the lease details above. 
+Answer in 2-4 sentences. Be specific and grounded in the lease details above.
 Do not give legal advice — explain and inform. If uncertain, say so clearly.
     `.trim();
 
@@ -864,14 +881,17 @@ Return ONLY the answer text, no JSON, no markdown.
   }
 }
 
-// Run Analysis on Load
+// ── Main Analysis Pipeline ──
+
 async function runAnalysis() {
   showState('Loading');
-  setLoadingStep('Loading regulations…');
 
   try {
+    // Step 1: Load regulations
+    setLoadingStep('Loading regulations…');
     const regulations = await loadRegulations();
 
+    // Step 2: Fetch PDF
     setLoadingStep('Fetching PDF…');
     const pdfBase64 = await getPDFBase64();
 
@@ -940,7 +960,7 @@ function getPDFBase64() {
   return new Promise((resolve, reject) => {
     chrome.storage.local.get(['pdfURL'], ({ pdfURL }) => {
       if (!pdfURL) {
-        reject(new Error('No PDF URL found. Click "Analyze This Lease" from the popup on a PDF page.'));
+        reject(new Error('No PDF URL found. Click "Analyze This Lease" in the extension popup on a PDF page.'));
         return;
       }
       fetchPDFBase64(pdfURL).then(resolve).catch(reject);

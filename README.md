@@ -2,9 +2,7 @@
 
 An AI Google Chrome extension focused on the safety of users from unfair leases. It aims to get users to better understand what they're signing for.
 
-It goes through each document summarizing key sections and flagging potential risks that the user may miss or want to look further into. These flags are broken down into verification from regulations from the user's current location and continues to develop based off of the user's preferences 
-
-(Maybe on the location for now EDIT LATER)
+It goes through each document summarizing key sections and flagging potential risks that the user may miss or want to look further into. These flags are broken down into verification from Seattle regulations and the analysis continues to develop based off of the user's preferences.
 
 ## API Key Setup
 
@@ -27,37 +25,49 @@ The key saves to Chrome's local storage and stays off the repo
 
 ## How to Run It
 
-### 1. Clone the repo
+### 1. Clone the repo and install dependencies
 ```bash
-git clone https://gitlab.com/YOUR_USERNAME/security-net.git
-cd security-net
+git clone <your-gitlab-repo-url>
+cd project-e
+npm install
 ```
 
-### 2. Load it in Chrome
+### 2. Build the PDF viewer
+```bash
+npm run build
+```
+This bundles `viewer/viewer.js` → `viewer/viewer.bundle.js`. You need to re-run this after any changes to `viewer/viewer.js`.
+
+Tip: run `npm run watch` to auto-rebuild on save.
+
+### 3. Load it in Chrome
 1. Go to `chrome://extensions/`
 2. Turn on Developer mode (top right)
 3. Click Load unpacked
 4. Select the security-net folder
 5. The shield icon shows up in your toolbar
 
-### 3. Add your API key
+### 4. Add your API key
 Follow the steps that were listed above
 
-### 4. Test it
+### 5. Test it
 1. Drag any lease PDF into a Chrome tab
 2. Click the shield icon
 3. Click Analyze This Lease
 4. Sidebar opens and starts analyzing
 
-> It falls back to a demo lease automatically so you can still test the full flow without a lease/pdf open.
+> You need to have a PDF open in the active tab for the analysis to work.
 
 ---
 
 ## After Changing Code
 
 Chrome won't auto-reload so after any edit:
-1. Go to `chrome://extensions/`
-2. Hit the refresh icon on Security Net
-3. Reopen the PDF tab
+1. If you changed `viewer/viewer.js`, rebuild with `npm run build` (or use `npm run watch`)
+2. Go to `chrome://extensions/`
+3. Hit the refresh icon on Security Net
+4. Reopen the PDF tab
+
+> **Note:** All other files (sidebar, popup, background, content scripts) don't need a build step — only `viewer/viewer.js` requires bundling because it uses npm packages.
 
 ---
