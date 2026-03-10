@@ -15,6 +15,85 @@ const memoriesToggle    = document.getElementById('memoriesToggle');
 // Stores the lease summary so Task 2 can use it
 let leaseSummaryCache = null;
 
+// Filter state
+let activeRiskFilter = 'all';
+
+// Dashboard & filter element refs
+const dashboardBar  = document.getElementById('dashboardBar');
+const filterSortBar = document.getElementById('filterSortBar');
+
+function updateDashboard(terms) {
+  const parents = terms.filter(t => !t.isSubtopic);
+  const counts = { high: 0, medium: 0, low: 0, unknown: 0 };
+  parents.forEach(t => { counts[t.risk] = (counts[t.risk] || 0) + 1; });
+
+  document.getElementById('dashTotal').textContent = parents.length;
+  document.getElementById('dashHigh').textContent = counts.high;
+  document.getElementById('dashMedium').textContent = counts.medium;
+  document.getElementById('dashLow').textContent = counts.low;
+  document.getElementById('dashUnknown').textContent = counts.unknown;
+
+  // Draw donut chart segments
+  const total = parents.length || 1;
+  const circumference = 100; // SVG stroke-dasharray uses percentage of circumference
+  const segments = [
+    { id: 'donutHigh',    count: counts.high },
+    { id: 'donutMedium',  count: counts.medium },
+    { id: 'donutLow',     count: counts.low },
+    { id: 'donutUnknown', count: counts.unknown },
+  ];
+  let offset = 0;
+  for (const seg of segments) {
+    const pct = (seg.count / total) * circumference;
+    const el = document.getElementById(seg.id);
+    el.style.strokeDasharray = `${pct} ${circumference - pct}`;
+    el.style.strokeDashoffset = `${-offset}`;
+    offset += pct;
+  }
+
+  dashboardBar.style.display = 'flex';
+  filterSortBar.style.display = 'flex';
+}
+
+function getFilteredTerms() {
+  if (!leaseSummaryCache) return [];
+  // Build parent+children clusters
+  const clusters = [];
+  let cur = null;
+  for (const term of leaseSummaryCache) {
+    if (!term.isSubtopic) { cur = { parent: term, children: [] }; clusters.push(cur); }
+    else if (cur) cur.children.push(term);
+  }
+  // Filter
+  const filtered = activeRiskFilter === 'all' ? clusters : clusters.filter(c => c.parent.risk === activeRiskFilter);
+  // Flatten
+  return filtered.flatMap(c => [c.parent, ...c.children]);
+}
+
+function applyFilterAndSort() {
+  const display = getFilteredTerms();
+  renderTerms(display);
+  if (display.length === 0 && leaseSummaryCache?.length > 0)
+    termsList.innerHTML = '<div class="filter-empty">No terms match this filter.</div>';
+}
+
+// Filter pill click handlers
+document.querySelectorAll('.filter-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    activeRiskFilter = pill.dataset.risk;
+    applyFilterAndSort();
+  });
+});
+
+// Turn RCW references like "RCW 59.18.150" into clickable links
+function linkifyRCW(text) {
+  return text.replace(/RCW\s+([\d.]+)/gi, (match, cite) =>
+    `<a href="https://app.leg.wa.gov/rcw/default.aspx?cite=${cite}" target="_blank" class="rcw-link">${match}</a>`
+  );
+}
+
 // Close Button
 document.getElementById('closeBtn').addEventListener('click', () => {
   window.parent.postMessage({ action: 'snClose' }, '*');
@@ -22,10 +101,18 @@ document.getElementById('closeBtn').addEventListener('click', () => {
 
 // Show/Hide States
 function showState(name) {
-  stateIdle.classList.remove('active');
-  stateLoading.classList.remove('active');
-  stateResults.classList.remove('active');
-  document.getElementById('state' + name).classList.add('active');
+  const outgoing = document.querySelector('#stateIdle.active, #stateLoading.active, #stateResults.active');
+  const incoming = document.getElementById('state' + name);
+  if (outgoing === incoming) return;
+
+  if (outgoing) outgoing.classList.remove('visible');
+  setTimeout(() => {
+    stateIdle.classList.remove('active');
+    stateLoading.classList.remove('active');
+    stateResults.classList.remove('active');
+    incoming.classList.add('active');
+    requestAnimationFrame(() => incoming.classList.add('visible'));
+  }, outgoing ? 250 : 0);
 }
 
 function setLoadingStep(msg) {
@@ -275,7 +362,7 @@ Keep all string values simple - avoid special characters, quotes within quotes, 
 // Render Term Cards
 function renderTerms(terms) {
   termsList.innerHTML = '';
-  terms.forEach(term => {
+  terms.forEach((term, index) => {
     const card = document.createElement('div');
     card.className = `term-card risk-${term.risk}${term.isSubtopic ? ' subtopic-card' : ''}`;
     card.dataset.id = term.id;
@@ -309,7 +396,7 @@ function renderTerms(terms) {
           <span class="meta-badge ${badgeClass}">${riskLabel}</span>
           ${term.market_note ? `<span class="meta-badge badge-gray">${term.market_note}</span>` : ''}
         </div>
-        ${term.citation !== 'No specific regulation applies' ? `<div class="term-citation">📋 ${term.citation}</div>` : ''}
+        ${term.citation !== 'No specific regulation applies' ? `<div class="term-citation">📋 ${linkifyRCW(term.citation)}</div>` : ''}
         <div class="followup-area">
           <div class="followup-label">Ask a follow-up question about this clause:</div>
           <div class="followup-input-row">
@@ -328,6 +415,18 @@ function renderTerms(terms) {
           <div class="correct-row"></div>
       </div>
     `;
+
+    // Staggered entrance animation
+    card.style.animationDelay = `${index * 0.04}s`;
+
+    // Wrap term-body contents in inner div for grid animation
+    const termBody = card.querySelector('.term-body');
+    if (termBody) {
+      const inner = document.createElement('div');
+      inner.className = 'term-body-inner';
+      while (termBody.firstChild) inner.appendChild(termBody.firstChild);
+      termBody.appendChild(inner);
+    }
 
     card.querySelector('.term-header').addEventListener('click', () => {
       card.classList.toggle('open');
@@ -381,7 +480,8 @@ function renderTerms(terms) {
         await renderMemories();
       }
       leaseSummaryCache = leaseSummaryCache.filter(t => t.id !== termId);
-      renderTerms(leaseSummaryCache);
+      updateDashboard(leaseSummaryCache);
+      applyFilterAndSort();
     });
   });
 }
@@ -400,7 +500,7 @@ async function handleFollowUp(termId) {
 
   btn.disabled = true;
   btn.textContent = '…';
-  responseEl.style.display = 'none';
+  responseEl.classList.remove('show');
 
   try {
     const prompt = `
@@ -413,13 +513,13 @@ Regulation note: ${term.citation}
 
 Their question: "${question}"
 
-Answer in 2-4 sentences. Be specific and grounded in the lease details above. 
+Answer in 2-4 sentences. Be specific and grounded in the lease details above.
 Do not give legal advice — explain and inform. If uncertain, say so clearly.
     `.trim();
 
     const answer = await callGemini(prompt);
     responseEl.textContent = answer;
-    responseEl.style.display = 'block';
+    responseEl.classList.add('show');
     input.value = '';
 
     // Save as sub-topic if checkbox is checked
@@ -444,7 +544,8 @@ Do not give legal advice — explain and inform. If uncertain, say so clearly.
 
     const parentIdx = leaseSummaryCache.findIndex(t => t.id === termId);
     leaseSummaryCache.splice(parentIdx + 1, 0, subTerm);
-    renderTerms(leaseSummaryCache);
+    updateDashboard(leaseSummaryCache);
+    applyFilterAndSort();
 
     const parentCard = document.querySelector(`.term-card[data-id="${termId}"]`);
     if (parentCard) parentCard.classList.add('open');
@@ -462,7 +563,7 @@ Do not give legal advice — explain and inform. If uncertain, say so clearly.
     }
   } catch (err) {
     responseEl.textContent = 'Error: ' + err.message;
-    responseEl.style.display = 'block';
+    responseEl.classList.add('show');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Ask';
@@ -555,7 +656,8 @@ Return ONLY a JSON array of 3 strings, no markdown:
   function applyCorrection(newValue) {
     term.value = newValue;
     term.explanation = `[Corrected by user] ${newValue}`;
-    renderTerms(leaseSummaryCache);
+    updateDashboard(leaseSummaryCache);
+    applyFilterAndSort();
     const newCard = document.querySelector(`.term-card[data-id="${termId}"]`);
     if (newCard) newCard.classList.add('open');
   }
@@ -691,7 +793,8 @@ async function renderMemories() {
           leaseSummaryCache = leaseSummaryCache.filter(t =>
             !(t.isSubtopic && t.parentId === parentId && t.savedQuestion === question)
           );
-          renderTerms(leaseSummaryCache);
+          updateDashboard(leaseSummaryCache);
+      applyFilterAndSort();
         }
 
         await renderMemories();
@@ -709,7 +812,8 @@ async function renderMemories() {
       if (leaseSummaryCache) {
         const id = category.toLowerCase().replace(/\s+/g, '_');
         leaseSummaryCache = leaseSummaryCache.filter(t => t.id !== id);
-        renderTerms(leaseSummaryCache);
+        updateDashboard(leaseSummaryCache);
+      applyFilterAndSort();
       }
       
       renderMemories();
@@ -803,8 +907,9 @@ Keep all string values simple - no special characters or quotes within quotes.
   } else {
     leaseSummaryCache.push(newTerm);
   }
-  renderTerms(leaseSummaryCache);
-  
+  updateDashboard(leaseSummaryCache);
+  applyFilterAndSort();
+
   // Scroll to and highlight the new card
   const newCard = document.querySelector(`.term-card[data-id="${newTerm.id}"]`);
   if (newCard) {
@@ -852,7 +957,8 @@ Return ONLY the answer text, no JSON, no markdown.
 
   const parentIdx = leaseSummaryCache.findIndex(t => t.id === parentId);
   leaseSummaryCache.splice(parentIdx + 1, 0, subTerm);
-  renderTerms(leaseSummaryCache);
+  updateDashboard(leaseSummaryCache);
+  applyFilterAndSort();
 
   const parentCard = document.querySelector(`.term-card[data-id="${parentId}"]`);
   if (parentCard) parentCard.classList.add('open');
@@ -912,7 +1018,8 @@ Keep all string values simple - no special characters or quotes within quotes.
     }
 
     leaseSummaryCache = [...parsed.terms, ...customTerms];
-    renderTerms(leaseSummaryCache);
+    updateDashboard(leaseSummaryCache);
+    applyFilterAndSort();
     showState('Results');
     
     // Show saved custom topics in memories section
@@ -928,8 +1035,7 @@ Keep all string values simple - no special characters or quotes within quotes.
     }
 
   } catch (err) {
-    stateLoading.classList.remove('active');
-    stateIdle.classList.add('active');
+    showState('Idle');
     document.querySelector('.idle-title').textContent = 'Analysis failed';
     document.querySelector('.idle-sub').textContent = err.message;
   }

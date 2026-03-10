@@ -64,8 +64,17 @@
     .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
     /* States - only one shows at a time */
-    #stateIdle, #stateLoading, #stateResults { display: none; }
+    #stateIdle, #stateLoading, #stateResults {
+      display: none;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.35s ease-out, transform 0.35s ease-out;
+    }
     #stateIdle.active, #stateLoading.active, #stateResults.active { display: block; }
+    #stateIdle.visible, #stateLoading.visible, #stateResults.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
 
     /* Idle State */
     .idle-card { text-align: center; padding: 40px 20px; }
@@ -93,6 +102,12 @@
     }
     .section-label:first-child { margin-top: 0; }
 
+    /* Card entrance animation */
+    @keyframes card-enter {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
     /* Term Cards (Task 1) */
     .term-card {
       background: var(--surface);
@@ -101,6 +116,7 @@
       margin-bottom: 8px;
       overflow: hidden;
       transition: border-color 0.15s;
+      animation: card-enter 0.3s ease-out both;
     }
     .term-card:hover { border-color: #3a5a7a; }
     .term-card.risk-low { border-left: 3px solid var(--green); }
@@ -159,8 +175,20 @@
     .term-card.open .expand-arrow { transform: rotate(180deg); }
 
     /* Term Card Expanded Content */
-    .term-body { display: none; padding: 0 14px 14px; border-top: 1px solid var(--border); }
-    .term-card.open .term-body { display: block; }
+    .term-body {
+      display: grid;
+      grid-template-rows: 0fr;
+      overflow: hidden;
+      transition: grid-template-rows 0.25s ease-out;
+      padding: 0 14px;
+      border-top: 1px solid transparent;
+    }
+    .term-card.open .term-body {
+      grid-template-rows: 1fr;
+      padding-bottom: 14px;
+      border-top-color: var(--border);
+    }
+    .term-body > .term-body-inner { overflow: hidden; }
     .term-explanation { color: var(--text); line-height: 1.65; font-size: 13px; padding-top: 12px; margin-bottom: 10px; }
     .term-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
     .meta-badge { padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 500; }
@@ -169,6 +197,8 @@
     .badge-red { background: var(--red-bg); color: var(--red); border: 1px solid #3a1010; }
     .badge-gray { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
     .term-citation { font-size: 11px; color: var(--muted); font-style: italic; margin-bottom: 12px; }
+    .rcw-link { color: var(--gold); text-decoration: underline; text-underline-offset: 2px; }
+    .rcw-link:hover { color: var(--gold-light); }
 
     /* Follow-up Question */
     .followup-area { margin-top: 4px; }
@@ -189,10 +219,20 @@
     .followup-btn:hover { background: var(--gold-light); }
     .followup-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .followup-response {
-      margin-top: 10px; padding: 10px 12px;
+      padding: 10px 12px;
       background: var(--surface2); border-radius: 6px;
       font-size: 12px; line-height: 1.65; color: var(--text);
-      border-left: 2px solid var(--gold); display: none;
+      border-left: 2px solid var(--gold);
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out;
+      margin-top: 0;
+    }
+    .followup-response.show {
+      max-height: 500px;
+      opacity: 1;
+      margin-top: 10px;
     }
 
     /* Source Quote */
@@ -273,7 +313,7 @@
     .correct-btn:hover { border-color: var(--yellow); color: var(--yellow); }
 
     /* Correction Form (inline) */
-    .correct-form { margin-top: 4px; }
+    .correct-form { margin-top: 4px; animation: card-enter 0.2s ease-out; }
     .correct-current { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
     .correct-current-val { color: var(--gold); font-weight: 500; }
     .correct-input {
@@ -363,14 +403,30 @@
     }
     .memories-section.open .memories-toggle { transform: rotate(180deg); }
     .memories-list {
-      display: none; padding: 0 14px 10px;
+      display: grid;
+      grid-template-rows: 0fr;
+      overflow: hidden;
+      transition: grid-template-rows 0.25s ease-out;
+      padding: 0 14px;
     }
-    .memories-section.open .memories-list { display: block; }
+    .memories-section.open .memories-list {
+      grid-template-rows: 1fr;
+      padding-bottom: 10px;
+    }
+    .memories-list > * { overflow: hidden; }
     .memories-hint {
-      display: none; padding: 0 14px 10px;
+      display: grid;
+      grid-template-rows: 0fr;
+      overflow: hidden;
+      transition: grid-template-rows 0.25s ease-out;
+      padding: 0 14px;
       font-size: 10px; color: var(--muted); font-style: italic;
     }
-    .memories-section.open .memories-hint { display: block; }
+    .memories-section.open .memories-hint {
+      grid-template-rows: 1fr;
+      padding-bottom: 10px;
+    }
+    .memories-hint > * { overflow: hidden; }
     .memory-item {
       display: flex; align-items: center; justify-content: space-between;
       padding: 6px 0; border-bottom: 1px solid var(--border);
@@ -389,6 +445,58 @@
 
     /* Divider */
     .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+    /* Dashboard Bar — Donut Chart */
+    .dashboard-bar {
+      display: flex; align-items: center; gap: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;
+      animation: card-enter 0.3s ease-out both;
+    }
+    .dash-chart-wrap {
+      position: relative; width: 86px; height: 86px; flex-shrink: 0;
+    }
+    .dash-donut { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .dash-donut-bg {
+      fill: none; stroke: var(--border); stroke-width: 3.5;
+    }
+    .dash-donut-seg {
+      fill: none; stroke-width: 3.5; stroke-linecap: round;
+      stroke-dasharray: 0 100; transition: stroke-dasharray 0.6s ease-out;
+    }
+    #donutHigh   { stroke: var(--red); }
+    #donutMedium { stroke: var(--yellow); }
+    #donutLow    { stroke: var(--green); }
+    #donutUnknown { stroke: var(--muted); }
+    .dash-chart-center {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--gold); line-height: 1;
+    }
+    .dash-legend { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+    .dash-legend-row { display: flex; align-items: center; gap: 6px; }
+    .dash-legend-count { font-family: 'DM Serif Display', serif; font-size: 14px; color: var(--text); min-width: 14px; }
+    .dash-legend-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .dash-dot, .pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .dot-red { background: var(--red); }
+    .dot-yellow { background: var(--yellow); }
+    .dot-green { background: var(--green); }
+    .dot-gray { background: var(--muted); }
+
+    /* Filter Bar */
+    .filter-sort-bar {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+      animation: card-enter 0.3s ease-out both; animation-delay: 0.05s;
+    }
+    .filter-pills { display: flex; gap: 4px; flex-wrap: wrap; }
+    .filter-pill {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 10px; font-size: 11px; font-family: 'DM Sans', sans-serif; font-weight: 500;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .filter-pill:hover { border-color: var(--gold); color: var(--text); }
+    .filter-pill.active { background: var(--surface2); border-color: var(--gold); color: var(--gold); }
+    .filter-empty { text-align: center; padding: 24px 16px; color: var(--muted); font-size: 12px; font-style: italic; }
   </style>
 </head>
 <body>
@@ -427,6 +535,52 @@
 
     <!-- Summarization and Review -->
     <div class="section-label">Summarization and Review</div>
+
+    <div id="dashboardBar" class="dashboard-bar" style="display:none;">
+      <div class="dash-chart-wrap">
+        <svg id="dashDonut" class="dash-donut" viewBox="0 0 36 36">
+          <circle class="dash-donut-bg" cx="18" cy="18" r="15.915" />
+          <circle class="dash-donut-seg" id="donutHigh"   cx="18" cy="18" r="15.915" />
+          <circle class="dash-donut-seg" id="donutMedium" cx="18" cy="18" r="15.915" />
+          <circle class="dash-donut-seg" id="donutLow"    cx="18" cy="18" r="15.915" />
+          <circle class="dash-donut-seg" id="donutUnknown" cx="18" cy="18" r="15.915" />
+        </svg>
+        <span class="dash-chart-center" id="dashTotal">0</span>
+      </div>
+      <div class="dash-legend">
+        <div class="dash-legend-row">
+          <span class="dash-dot dot-red"></span>
+          <span class="dash-legend-count" id="dashHigh">0</span>
+          <span class="dash-legend-label">Flagged</span>
+        </div>
+        <div class="dash-legend-row">
+          <span class="dash-dot dot-yellow"></span>
+          <span class="dash-legend-count" id="dashMedium">0</span>
+          <span class="dash-legend-label">Review</span>
+        </div>
+        <div class="dash-legend-row">
+          <span class="dash-dot dot-green"></span>
+          <span class="dash-legend-count" id="dashLow">0</span>
+          <span class="dash-legend-label">Standard</span>
+        </div>
+        <div class="dash-legend-row">
+          <span class="dash-dot dot-gray"></span>
+          <span class="dash-legend-count" id="dashUnknown">0</span>
+          <span class="dash-legend-label">N/A</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="filterSortBar" class="filter-sort-bar" style="display:none;">
+      <div class="filter-pills">
+        <button class="filter-pill active" data-risk="all">All</button>
+        <button class="filter-pill" data-risk="high"><span class="pill-dot dot-red"></span>Flagged</button>
+        <button class="filter-pill" data-risk="medium"><span class="pill-dot dot-yellow"></span>Review</button>
+        <button class="filter-pill" data-risk="low"><span class="pill-dot dot-green"></span>Standard</button>
+        <button class="filter-pill" data-risk="unknown"><span class="pill-dot dot-gray"></span>N/A</button>
+      </div>
+    </div>
+
     <div id="termsList"></div>
 
     <div class="divider"></div>
@@ -453,7 +607,7 @@
         <button class="memories-toggle" id="memoriesToggle">▼</button>
       </div>
       <div class="memories-list" id="memoriesList"></div>
-      <div class="memories-hint">These topics are analyzed automatically on every lease.</div>
+      <div class="memories-hint"><span>These topics are analyzed automatically on every lease.</span></div>
     </div>
 
   </div>
