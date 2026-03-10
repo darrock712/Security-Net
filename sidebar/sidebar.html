@@ -106,6 +106,37 @@
     .term-card.risk-low { border-left: 3px solid var(--green); }
     .term-card.risk-medium { border-left: 3px solid var(--yellow); }
     .term-card.risk-high { border-left: 3px solid var(--red); }
+    
+    /* Highlight for newly added custom categories */
+    .term-card.just-added {
+      animation: pulse-gold 0.6s ease-out 2;
+      box-shadow: 0 0 12px rgba(200, 184, 138, 0.4);
+    }
+    @keyframes pulse-gold {
+      0%, 100% { border-color: var(--border); }
+      50% { border-color: var(--gold); }
+    }
+
+    .subtopic-card {
+      margin-left: 18px;
+      border-left: 3px solid var(--gold) !important;
+      opacity: 0.92;
+    }
+    .subtopic-card .term-name { font-size: 12px; color: var(--muted); }
+    .subtopic-card .term-value { display: none; }
+
+    .subtopic-delete {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 16px;
+      cursor: pointer;
+      padding: 2px 6px;
+      line-height: 1;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .subtopic-delete:hover { color: var(--red); }
 
     .term-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -117,7 +148,13 @@
     .risk-dot.medium { background: var(--yellow); }
     .risk-dot.high { background: var(--red); }
     .term-name { font-weight: 500; font-size: 13px; }
-    .term-value { font-size: 12px; color: var(--gold); font-weight: 500; }
+    .term-value {
+      font-size: 12px; color: var(--gold); font-weight: 500;
+      max-width: 160px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .expand-arrow { color: var(--muted); font-size: 11px; transition: transform 0.2s; }
     .term-card.open .expand-arrow { transform: rotate(180deg); }
 
@@ -158,6 +195,53 @@
       border-left: 2px solid var(--gold); display: none;
     }
 
+    /* Source Quote */
+    .source-quote {
+      margin-bottom: 10px; padding: 8px 10px;
+      background: var(--surface2); border-left: 2px solid var(--border);
+      border-radius: 0 4px 4px 0;
+    }
+    .source-quote-label { display: block; font-size: 10px; color: var(--muted); margin-bottom: 3px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .source-quote-text { font-size: 11px; color: var(--text); font-style: italic; line-height: 1.55; }
+
+    /* Term Actions Row (jump + correction buttons) */
+    .term-actions-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+
+    .term-explanation.has-source {
+      cursor: pointer;
+      transition: background 0.15s;
+      border-radius: 4px;
+      padding: 4px 6px;
+      margin: -4px -6px 10px;
+    }
+    .term-explanation.has-source:hover {
+      background: var(--surface2);
+      outline: 1px solid var(--border);
+    }
+    .source-hint {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 10px;
+      color: var(--muted);
+      font-style: italic;
+      vertical-align: middle;
+    }
+    .term-explanation.has-source:hover .source-hint {
+      color: var(--gold);
+    }
+
+    .highlight-phrase {
+      background: rgba(200, 184, 138, 0.18);
+      border-bottom: 1px dashed var(--gold);
+      border-radius: 2px;
+      cursor: pointer;
+      padding: 0 2px;
+      transition: background 0.15s;
+    }
+    .highlight-phrase:hover {
+      background: rgba(200, 184, 138, 0.38);
+    }
+
     /* Correction Button */
     .correct-row { margin-top: 8px; }
     .correct-btn {
@@ -165,7 +249,75 @@
       color: var(--muted); font-size: 11px; padding: 4px 10px;
       border-radius: 4px; cursor: pointer; font-family: 'DM Sans', sans-serif;
     }
+
+    /* Correction Choices */
+    .correct-choices-label {
+      font-size: 11px; color: var(--muted); margin-bottom: 6px; margin-top: 8px;
+    }
+    .correct-choices {
+      display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;
+    }
+    .correct-choice-btn {
+      text-align: left; padding: 7px 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--text); font-size: 11px;
+      cursor: pointer; font-family: 'DM Sans', sans-serif;
+      transition: border-color 0.15s;
+    }
+    .correct-choice-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .correct-choice-btn.selected { border-color: var(--gold); color: var(--gold); background: #1e2d3d; }
+    .correct-divider-label {
+      font-size: 10px; color: var(--muted); margin-bottom: 6px;
+      text-transform: uppercase; letter-spacing: 0.8px;
+    }
     .correct-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+
+    /* Correction Form (inline) */
+    .correct-form { margin-top: 4px; }
+    .correct-current { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .correct-current-val { color: var(--gold); font-weight: 500; }
+    .correct-input {
+      width: 100%; padding: 8px 10px; margin-bottom: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 12px;
+      font-family: 'DM Sans', sans-serif; outline: none;
+    }
+    .correct-input:focus { border-color: var(--gold); }
+    .correct-actions { display: flex; gap: 6px; }
+    .correct-verify-btn {
+      padding: 6px 12px; background: var(--gold); color: var(--bg);
+      border: none; border-radius: 5px; font-size: 11px; font-weight: 600;
+      cursor: pointer; font-family: 'DM Sans', sans-serif;
+    }
+    .correct-verify-btn:hover { background: var(--gold-light); }
+    .correct-verify-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .correct-cancel-btn {
+      padding: 6px 12px; background: none; border: 1px solid var(--border);
+      color: var(--muted); border-radius: 5px; font-size: 11px;
+      cursor: pointer; font-family: 'DM Sans', sans-serif;
+    }
+    .correct-cancel-btn:hover { border-color: var(--red); color: var(--red); }
+    .correct-verify-result {
+      margin-top: 8px; padding: 8px 10px; border-radius: 5px;
+      font-size: 11px; line-height: 1.55; display: none;
+    }
+    .verdict-ok { background: var(--green-bg); color: var(--green); border-left: 2px solid var(--green); }
+    .verdict-warn { background: var(--red-bg); color: #cc8080; border-left: 2px solid var(--red); }
+    .verdict-uncertain { background: var(--yellow-bg); color: var(--yellow); border-left: 2px solid var(--yellow); }
+    .correct-reason { font-style: italic; }
+    .correct-confirm-row { margin-top: 8px; display: flex; gap: 6px; }
+    .correct-apply-btn {
+      padding: 5px 10px; background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 4px; font-size: 11px;
+      cursor: pointer; font-family: 'DM Sans', sans-serif;
+    }
+    .correct-apply-btn:hover { border-color: var(--green); color: var(--green); }
+    .correct-cancel-inline-btn {
+      padding: 5px 10px; background: none; border: 1px solid var(--border);
+      color: var(--muted); border-radius: 4px; font-size: 11px;
+      cursor: pointer; font-family: 'DM Sans', sans-serif;
+    }
+    .correct-cancel-inline-btn:hover { border-color: var(--red); color: var(--red); }
 
     /* Priority Banner (Task 2) */
     .priority-banner {
@@ -175,46 +327,65 @@
     .priority-banner-title { font-family: 'DM Serif Display', serif; font-size: 14px; color: var(--gold); margin-bottom: 4px; }
     .priority-banner-sub { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
 
-    /* Priority Tags */
-    .priority-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-    .priority-tag {
-      padding: 5px 12px; border-radius: 20px; font-size: 12px;
-      border: 1px solid var(--border); background: var(--surface2);
-      color: var(--muted); cursor: pointer; transition: all 0.15s;
-    }
-    .priority-tag.selected { border-color: var(--gold); background: #2a2010; color: var(--gold); }
-
     /* Free Text Input */
+    .priority-input-row {
+      display: flex; gap: 6px; margin-bottom: 10px;
+    }
     .priority-free-input {
-      width: 100%; padding: 9px 12px;
+      flex: 1; padding: 9px 12px;
       background: var(--surface2); border: 1px solid var(--border);
       border-radius: 6px; color: var(--text); font-size: 12px;
-      font-family: 'DM Sans', sans-serif; outline: none; resize: none; margin-bottom: 10px;
+      font-family: 'DM Sans', sans-serif; outline: none;
     }
     .priority-free-input:focus { border-color: var(--gold); }
-
-    /* Submit Button */
-    .priority-submit-btn {
-      width: 100%; padding: 10px; background: var(--gold); color: var(--bg);
-      border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
-      cursor: pointer; font-family: 'DM Sans', sans-serif;
+    .priority-add-btn {
+      padding: 9px 14px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--muted); font-size: 12px; cursor: pointer;
+      font-family: 'DM Sans', sans-serif; white-space: nowrap;
     }
-    .priority-submit-btn:hover { background: var(--gold-light); }
-    .priority-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .priority-add-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .priority-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* Priority Results (Task 2) */
-    #priorityResults { display: none; margin-top: 6px; }
-    .focused-card {
+    /* Memories Section */
+    .memories-section {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; margin-bottom: 10px; overflow: hidden;
+      border-radius: 8px; margin-top: 12px; overflow: hidden;
     }
-    .focused-header { padding: 12px 14px; border-bottom: 1px solid var(--border); }
-    .focused-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
-    .focused-lease-text { font-size: 12px; color: var(--muted); font-style: italic; margin-bottom: 6px; line-height: 1.5; }
-    .focused-relevance { font-size: 12px; padding: 8px 10px; border-radius: 5px; line-height: 1.55; }
-    .relevance-warning { background: var(--yellow-bg); color: #dda030; border-left: 2px solid var(--yellow); }
-    .relevance-alert { background: var(--red-bg); color: #cc6060; border-left: 2px solid var(--red); }
-    .relevance-ok { background: var(--green-bg); color: #50a870; border-left: 2px solid var(--green); }
+    .memories-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; cursor: pointer;
+    }
+    .memories-header:hover { background: var(--surface2); }
+    .memories-title { font-size: 12px; color: var(--muted); }
+    .memories-toggle {
+      background: none; border: none; color: var(--muted);
+      font-size: 10px; cursor: pointer; transition: transform 0.2s;
+    }
+    .memories-section.open .memories-toggle { transform: rotate(180deg); }
+    .memories-list {
+      display: none; padding: 0 14px 10px;
+    }
+    .memories-section.open .memories-list { display: block; }
+    .memories-hint {
+      display: none; padding: 0 14px 10px;
+      font-size: 10px; color: var(--muted); font-style: italic;
+    }
+    .memories-section.open .memories-hint { display: block; }
+    .memory-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 0; border-bottom: 1px solid var(--border);
+    }
+    .memory-item:last-child { border-bottom: none; }
+    .memory-name { font-size: 12px; color: var(--text); }
+    .memory-delete {
+      background: none; border: none; color: var(--muted);
+      font-size: 14px; cursor: pointer; padding: 2px 6px;
+    }
+    .memory-delete:hover { color: var(--red); }
+    .memories-empty {
+      font-size: 11px; color: var(--muted); padding: 4px 0;
+      font-style: italic;
+    }
 
     /* Divider */
     .divider { height: 1px; background: var(--border); margin: 16px 0; }
@@ -293,30 +464,27 @@
 
     <!-- Prioritize and Personalized -->
     <div class="priority-banner">
-      <div class="priority-banner-title">Prioritize and Personalized</div>
-      <div class="priority-banner-sub">Select your priorities and the AI will re-focus the analysis around your situation.</div>
-      <div class="priority-tags" id="priorityTags">
-        <div class="priority-tag" data-tag="pet policy">🐾 Pet policy</div>
-        <div class="priority-tag" data-tag="early termination">🚪 Early exit</div>
-        <div class="priority-tag" data-tag="upfront costs">💰 Upfront costs</div>
-        <div class="priority-tag" data-tag="parking">🚗 Parking</div>
-        <div class="priority-tag" data-tag="utilities">💡 Utilities</div>
-        <div class="priority-tag" data-tag="rent increases">📈 Rent increases</div>
+      <div class="priority-banner-title">Add Custom Topic</div>
+      <div class="priority-banner-sub">Analyze something specific not covered above.</div>
+      <div class="priority-input-row">
+        <input
+          type="text"
+          class="priority-free-input"
+          id="priorityFreeText"
+          placeholder="e.g. 'smoking policy' or 'I have a large dog'"
+        />
+        <button class="priority-add-btn" id="priorityAddBtn">+ Add</button>
       </div>
-      <textarea
-        class="priority-free-input"
-        id="priorityFreeText"
-        rows="2"
-        placeholder="Anything specific? e.g. 'I have a large dog and may need to leave after 8 months'"
-      ></textarea>
-      <button class="priority-submit-btn" id="prioritySubmitBtn">Re-focus analysis for me</button>
     </div>
 
-    <!-- Prioritize and Personalized Results -->
-    <div id="priorityResults">
-      <div class="divider"></div>
-      <div class="section-label">Focused on your priorities</div>
-      <div id="priorityCardsList"></div>
+    <!-- Saved Topics (Memories) -->
+    <div class="memories-section" id="memoriesSection" style="display: none;">
+      <div class="memories-header">
+        <span class="memories-title">📌 Saved Topics</span>
+        <button class="memories-toggle" id="memoriesToggle">▼</button>
+      </div>
+      <div class="memories-list" id="memoriesList"></div>
+      <div class="memories-hint">These topics are analyzed automatically on every lease.</div>
     </div>
 
   </div>
